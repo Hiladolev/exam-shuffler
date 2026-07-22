@@ -15,11 +15,12 @@ def is_header_line(line):
 
 def strip_version_lines(text):
     lines = text.splitlines()
-    return "\n".join(
-        line
-        for line in lines
-        if not VERSION_PATTERN.search(line) and not PAGE_NUMBER_PATTERN.search(line)
-    )
+    result_lines = []
+    for line in lines:
+        if VERSION_PATTERN.search(line):
+            continue
+        result_lines.append(PAGE_NUMBER_PATTERN.sub("", line))
+    return "\n".join(result_lines)
 
 
 def parse_ocr_text(text):
