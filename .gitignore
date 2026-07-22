@@ -30,3 +30,10 @@ htmlcov/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Exam content and generated OCR/parsing output
+sample_exams/
+ocr_output.txt
+parser_output.txt
+shuffled_output.txt
+needs_review.txt
