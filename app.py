@@ -37,13 +37,15 @@ def build_final_content(edited_clean, edited_review_cards):
         lines.append("")
 
     if edited_review_cards:
+        shuffled_review_cards = shuffle_questions(edited_review_cards)
         lines.append("=== Reviewed (previously flagged) Questions ===")
-        for i, q in enumerate(edited_review_cards, start=1):
+        for i, q in enumerate(shuffled_review_cards, start=1):
             lines.append(f"--- Question {i} ---")
             lines.append(f"Question: {q['question']}")
             lines.append("Choices:")
             for j, choice in enumerate(q["choices"]):
                 lines.append(f"  {j}: {choice}")
+            lines.append(f"Correct answer index: {q['correct_index']}")
             lines.append("")
 
     return "\n".join(lines)

@@ -6,6 +6,7 @@ HEADER_PATTERN = re.compile(r"שאלה\s*מס['’].*\d")
 POINTS_PATTERN = re.compile(r"\(\s*\d+\s*נק['’]\s*\)")
 CHOICE_PATTERN = re.compile(r"^\s*([אבגדה])\.\s*(.*)$")
 VERSION_PATTERN = re.compile(r"מספר\s*גרסה\s*:\s*\d+")
+PAGE_NUMBER_PATTERN = re.compile(r"מספר\s*עמוד\s*:?\s*\d+")
 
 
 def is_header_line(line):
@@ -14,7 +15,11 @@ def is_header_line(line):
 
 def strip_version_lines(text):
     lines = text.splitlines()
-    return "\n".join(line for line in lines if not VERSION_PATTERN.search(line))
+    return "\n".join(
+        line
+        for line in lines
+        if not VERSION_PATTERN.search(line) and not PAGE_NUMBER_PATTERN.search(line)
+    )
 
 
 def parse_ocr_text(text):
