@@ -7,10 +7,15 @@ POINTS_PATTERN = re.compile(r"\(\s*\d+\s*נק['’]\s*\)")
 CHOICE_PATTERN = re.compile(r"^\s*([אבגדה])\.\s*(.*)$")
 VERSION_PATTERN = re.compile(r"מספר\s*גרסה\s*:\s*\d+")
 PAGE_NUMBER_PATTERN = re.compile(r"מספר\s*עמוד\s*:?\s*\d+")
+BIDI_MARK_PATTERN = re.compile(r"[‎‏‪-‮⁦-⁩]")
 
 
 def is_header_line(line):
     return bool(HEADER_PATTERN.search(line)) or bool(POINTS_PATTERN.search(line))
+
+
+def strip_bidi_marks(text):
+    return BIDI_MARK_PATTERN.sub("", text)
 
 
 def strip_version_lines(text):
@@ -24,6 +29,7 @@ def strip_version_lines(text):
 
 
 def parse_ocr_text(text):
+    text = strip_bidi_marks(text)
     lines = text.splitlines()
 
     header_indices = [i for i, line in enumerate(lines) if is_header_line(line)]
@@ -76,7 +82,10 @@ if __name__ == "__main__":
     needs_review = []
 
     for i, q in enumerate(parsed_questions, start=1):
-        if len(q["choices"]) > 5:
+        if len(q["choices"]) == 0:
+            print(f"WARNING: Question {i} has 0 choices - likely a parsing failure, needs manual review")
+            needs_review.append(q)
+        elif len(q["choices"]) > 5:
             print(f"WARNING: Question {i} has {len(q['choices'])} choices - likely merged with a following question, needs manual review")
             needs_review.append(q)
         else:

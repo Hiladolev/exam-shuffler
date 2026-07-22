@@ -16,7 +16,7 @@ def run_pipeline(pdf_path, page_number):
     clean_questions = []
     needs_review = []
     for q in parsed_questions:
-        if len(q["choices"]) > 5:
+        if len(q["choices"]) == 0 or len(q["choices"]) > 5:
             needs_review.append(q)
         else:
             clean_questions.append(q)
