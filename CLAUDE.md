@@ -12,6 +12,8 @@ The core pipeline works end-to-end on a full 8-page exam (all pages with questio
 
 Open task for next session: the review-screen split tool (`app.py`) only supports splitting a flagged block into 2 questions. On the full exam, the block flagged around question 18 actually contains **3** merged questions (18, 19, and 20) — their headers were OCR-mangled (e.g. "מס'" and "נק'" misread) so `parser.py` never detected the boundaries between them. Need to extend the split UI to handle an arbitrary number of splits, not just one split point into 2 parts.
 
+Design for this is done: see `docs/superpowers/specs/2026-07-23-generic-split-design.md`. Next step is to turn that design into an implementation plan (no code written yet).
+
 ## Project Goal
 
 A Python web app (Streamlit) that takes a multiple-choice exam PDF as input and outputs a version with shuffled answer choices.
