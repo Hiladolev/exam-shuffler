@@ -10,9 +10,13 @@ The core pipeline works end-to-end on a full 8-page exam (all pages with questio
 - `shuffler_core.py` — shuffles a question's choices and tracks the new correct-answer index.
 - `app.py` — Streamlit UI: upload a PDF, review/edit clean and flagged questions, download the final shuffled exam.
 
-Open task for next session: the review-screen split tool (`app.py`) only supports splitting a flagged block into 2 questions. On the full exam, the block flagged around question 18 actually contains **3** merged questions (18, 19, and 20) — their headers were OCR-mangled (e.g. "מס'" and "נק'" misread) so `parser.py` never detected the boundaries between them. Need to extend the split UI to handle an arbitrary number of splits, not just one split point into 2 parts.
+The review-screen split tool (`app.py`) previously only supported splitting a flagged block into 2 questions. On the full exam, the block flagged around question 18 actually contains **3** merged questions (18, 19, and 20) — their headers were OCR-mangled (e.g. "מס'" and "נק'" misread) so `parser.py` never detected the boundaries between them.
 
-Design for this is done: see `docs/superpowers/specs/2026-07-23-generic-split-design.md`. Next step is to turn that design into an implementation plan (no code written yet).
+This has been generalized to support an arbitrary number of splits: `parser.py` now has `find_split_suggestions` (auto-detects likely split points from embedded headers) and `shuffler_core.py` now has `split_choices` (cuts a block into N parts). Design: `docs/superpowers/specs/2026-07-23-generic-split-design.md`. Plan: `docs/superpowers/plans/2026-07-23-generic-split-implementation.md`. Tasks 1-4 (pytest setup, `find_split_suggestions`, `split_choices`, and the N-way split UI in `app.py`) are done, tested, and committed on branch `generic-split`.
+
+Task 5 of that plan (manual end-to-end verification against the full 8-page exam, confirming the 18/19/20 block splits correctly) is **blocked**: `app.py` hardcodes `PAGE_NUMBER = 3` and only OCRs that single page (`run_pipeline` → `run_ocr(pdf_path, page_number)`), unlike `test_ocr.py`'s `__main__` which loops all pages. The app as it stands can't reproduce the full multi-page exam scenario. Fixing this (looping all pages in `app.py`'s pipeline, like `test_ocr.py` already does) is out of scope for the split-feature plan and needs its own design/plan session before Task 5 can be attempted.
+
+Known bug (not yet fixed, noted for a future session): on the review screen, editing a `text_area` (question text) and then immediately clicking "Generate Final File" without first clicking/tabbing away from the field causes the edit to not register in the final output. Streamlit only commits a `text_area`'s value to session state on blur, so the in-progress edit is lost. Affects both the clean-question and flagged-question edit loops in `app.py`.
 
 ## Project Goal
 
