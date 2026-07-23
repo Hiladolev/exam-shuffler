@@ -1,8 +1,8 @@
 import streamlit as st
 
 from test_ocr import run_ocr
-from parser import strip_version_lines, parse_ocr_text
-from shuffler_core import shuffle_questions
+from parser import strip_version_lines, parse_ocr_text, find_split_suggestions
+from shuffler_core import shuffle_questions, split_choices
 
 PAGE_NUMBER = 3
 UPLOAD_PATH = "uploaded_exam.pdf"
@@ -115,23 +115,36 @@ if st.session_state.get("processed"):
             for k, choice in enumerate(q["choices"]):
                 st.write(f"{k}: {choice}")
 
+            suggestions = find_split_suggestions(q["choices"])
+            suggested_value = ", ".join(str(s) for s in suggestions)
+            if suggestions:
+                st.caption(
+                    f"Detected {len(suggestions) + 1} parts "
+                    f"(suggested split points: {suggested_value})"
+                )
+
             split_input = st.text_input(
-                "Enter the choice index where a new question actually starts (e.g. 4)",
+                "Enter split points as comma-separated choice indices (e.g. 4, 9)",
+                value=suggested_value,
                 key=f"review_split_input_{i}",
             )
-            if st.button("Split into two questions", key=f"review_split_button_{i}"):
+            if st.button("Split question", key=f"review_split_button_{i}"):
+                tokens = [t.strip() for t in split_input.split(",") if t.strip()]
                 try:
-                    split_at = int(split_input)
+                    split_points = sorted(set(int(t) for t in tokens))
                 except ValueError:
-                    split_at = None
+                    split_points = None
 
-                if split_at is None or not (0 < split_at < len(q["choices"])):
-                    st.error(f"Enter a whole number between 1 and {len(q['choices']) - 1}.")
+                if split_points is None:
+                    st.error("Enter whole numbers separated by commas (e.g. 4, 9).")
+                elif not split_points:
+                    st.error("Enter at least one split point.")
+                elif any(not (0 < p < len(q["choices"])) for p in split_points):
+                    st.error(f"Split points must be between 1 and {len(q['choices']) - 1}.")
                 else:
-                    st.session_state[split_key] = [
-                        {"question": q["question"], "choices": q["choices"][:split_at]},
-                        {"question": "", "choices": q["choices"][split_at:]},
-                    ]
+                    st.session_state[split_key] = split_choices(
+                        q["question"], q["choices"], split_points
+                    )
                     st.rerun()
         else:
             split_cards = st.session_state[split_key]
