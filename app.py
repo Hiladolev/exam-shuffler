@@ -1,15 +1,29 @@
 import streamlit as st
+from pdf2image import pdfinfo_from_path
 
-from test_ocr import run_ocr
+from test_ocr import run_ocr_all_pages, MIN_PAGE_TEXT_LENGTH, POPPLER_PATH
 from parser import strip_version_lines, parse_ocr_text, find_split_suggestions
 from shuffler_core import shuffle_questions, split_choices
 
-PAGE_NUMBER = 3
 UPLOAD_PATH = "uploaded_exam.pdf"
 
 
-def run_pipeline(pdf_path, page_number):
-    raw_text = run_ocr(pdf_path, page_number)
+def run_pipeline(pdf_path):
+    total_pages = pdfinfo_from_path(pdf_path, poppler_path=POPPLER_PATH)["Pages"]
+    total_to_process = total_pages - 1
+
+    progress = st.progress(0)
+    status = st.empty()
+    raw_texts = []
+    for i, (page_number, text) in enumerate(run_ocr_all_pages(pdf_path), start=1):
+        if len(text.strip()) >= MIN_PAGE_TEXT_LENGTH:
+            raw_texts.append(text)
+        progress.progress(i / total_to_process)
+        status.text(f"Processing page {i} of {total_to_process}")
+    progress.empty()
+    status.empty()
+
+    raw_text = "\n\n".join(raw_texts)
     raw_text = strip_version_lines(raw_text)
     parsed_questions = parse_ocr_text(raw_text)
 
@@ -74,7 +88,7 @@ if uploaded_file is not None:
         with open(UPLOAD_PATH, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        shuffled_questions, needs_review = run_pipeline(UPLOAD_PATH, PAGE_NUMBER)
+        shuffled_questions, needs_review = run_pipeline(UPLOAD_PATH)
         st.session_state["shuffled_questions"] = shuffled_questions
         st.session_state["needs_review"] = needs_review
         st.session_state["processed"] = True
