@@ -14,6 +14,14 @@ def is_header_line(line):
     return bool(HEADER_PATTERN.search(line)) or bool(POINTS_PATTERN.search(line))
 
 
+def find_split_suggestions(choices):
+    suggestions = set()
+    for j, choice in enumerate(choices):
+        if HEADER_PATTERN.search(choice):
+            suggestions.add(j + 1)
+    return sorted(suggestions)
+
+
 def strip_bidi_marks(text):
     return BIDI_MARK_PATTERN.sub("", text)
 
