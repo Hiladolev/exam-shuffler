@@ -318,15 +318,17 @@ git commit -m "Generalize review-screen split UI to N-way splits with auto-sugge
 
 **Files:** none (manual verification only)
 
-- [ ] **Step 1: Run the full pipeline against the real exam**
+Unblocked and completed via `docs/superpowers/plans/2026-07-26-multipage-ocr-implementation.md`, which replaced `app.py`'s hardcoded `PAGE_NUMBER` with a generic all-pages loop.
+
+- [x] **Step 1: Run the full pipeline against the real exam**
 
 With the Streamlit server running (`streamlit run app.py`), upload the full 8-page exam PDF used in prior sessions (see `CLAUDE.md` — the one with the merged question 18/19/20 block) and click "Process".
 
-- [ ] **Step 2: Check the flagged block's suggestions**
+- [x] **Step 2: Check the flagged block's suggestions**
 
 Find the flagged block that used to contain questions 18, 19, and 20. Confirm the split input shows 2 auto-suggested split points, or fewer if OCR mangling defeated header detection for one of the boundaries — this is expected per the design doc; the manual-add path covers that gap.
 
-- [ ] **Step 3: Split into 3 parts and complete the exam end-to-end**
+- [x] **Step 3: Split into 3 parts and complete the exam end-to-end**
 
 Adjust the split points if needed (add/remove indices in the text input) so the block splits into exactly 3 parts corresponding to questions 18, 19, and 20. Click "Split question", clean up each part's question text and choices in the edit boxes (trailing glued-on header fragments from OCR are expected and require manual trimming — this is explicitly out of scope per the design doc), then click "Generate Final File" and confirm the download contains all 3 questions with correct, shuffled choices.
 
