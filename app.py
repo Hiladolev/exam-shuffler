@@ -109,12 +109,21 @@ if st.session_state.get("processed"):
                 f"Choice {j}", value=choice, key=f"clean_q_{i}_choice_{j}"
             )
             choices.append(choice_text)
-        st.caption(f"Correct answer index: {q['correct_index']}")
+        if st.button("Add answer choice", key=f"clean_q_{i}_add_choice"):
+            q["choices"].append("")
+            st.rerun()
+        correct_index = st.radio(
+            "Correct answer",
+            options=range(len(choices)),
+            format_func=lambda idx: f"{idx}: {choices[idx]}",
+            index=q["correct_index"],
+            key=f"clean_q_{i}_correct_index",
+        )
         edited_clean.append(
             {
                 "question": question_text,
                 "choices": choices,
-                "correct_index": q["correct_index"],
+                "correct_index": correct_index,
             }
         )
 
