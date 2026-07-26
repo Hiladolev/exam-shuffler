@@ -13,12 +13,15 @@ def run_pipeline(pdf_path):
     total_to_process = total_pages - 1
 
     progress = st.progress(0)
+    status = st.empty()
     raw_texts = []
     for i, (page_number, text) in enumerate(run_ocr_all_pages(pdf_path), start=1):
         if len(text.strip()) >= MIN_PAGE_TEXT_LENGTH:
             raw_texts.append(text)
         progress.progress(i / total_to_process)
+        status.text(f"Processing page {i} of {total_to_process}")
     progress.empty()
+    status.empty()
 
     raw_text = "\n\n".join(raw_texts)
     raw_text = strip_version_lines(raw_text)
