@@ -90,11 +90,17 @@ def render_question_editor(state, key_prefix):
 
     if remove_index is not None:
         state["choices"] = remove_choice(choices, remove_index, MIN_CHOICES)
+        state["correct_index"] = st.session_state.get(
+            f"{key_prefix}_correct_index", state.get("correct_index", 0)
+        )
         st.session_state[version_key] = version + 1
         st.rerun()
 
     if st.button("Add answer choice", key=f"{key_prefix}_add_choice"):
         state["choices"].append("")
+        state["correct_index"] = st.session_state.get(
+            f"{key_prefix}_correct_index", state.get("correct_index", 0)
+        )
         st.rerun()
 
     correct_index = st.radio(

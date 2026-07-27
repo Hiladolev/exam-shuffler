@@ -43,6 +43,24 @@ def test_remove_choice_preserves_unsaved_edit_to_another_choice():
     assert remaining == ["A-fixed", "B", "C", "D"]
 
 
+def test_add_choice_preserves_selected_correct_answer():
+    at = _make_processed_app_test()
+
+    at.radio(key="clean_q_0_correct_index").set_value(2).run()
+    at.button(key="clean_q_0_add_choice").click().run()
+
+    assert at.radio(key="clean_q_0_correct_index").value == 2
+
+
+def test_remove_choice_preserves_selected_correct_answer():
+    at = _make_processed_app_test()
+
+    at.radio(key="clean_q_0_correct_index").set_value(2).run()
+    at.button(key="clean_q_0_v0_remove_4").click().run()
+
+    assert at.radio(key="clean_q_0_correct_index").value == 2
+
+
 def test_build_final_content_does_not_reshuffle_review_cards():
     edited_review_cards = [
         {"question": "Q1", "choices": ["x", "y", "z"], "correct_index": 2},
