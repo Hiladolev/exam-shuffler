@@ -39,9 +39,9 @@ def run_pipeline(pdf_path):
     return shuffled_questions, needs_review
 
 
-def build_final_content(edited_clean, edited_review_cards):
+def _format_question_lines(questions):
     lines = []
-    for i, q in enumerate(edited_clean, start=1):
+    for i, q in enumerate(questions, start=1):
         lines.append(f"--- Question {i} ---")
         lines.append(f"Question: {q['question']}")
         lines.append("Choices:")
@@ -49,18 +49,15 @@ def build_final_content(edited_clean, edited_review_cards):
             lines.append(f"  {j}: {choice}")
         lines.append(f"Correct answer index: {q['correct_index']}")
         lines.append("")
+    return lines
+
+
+def build_final_content(edited_clean, edited_review_cards):
+    lines = _format_question_lines(edited_clean)
 
     if edited_review_cards:
-        shuffled_review_cards = shuffle_questions(edited_review_cards)
         lines.append("=== Reviewed (previously flagged) Questions ===")
-        for i, q in enumerate(shuffled_review_cards, start=1):
-            lines.append(f"--- Question {i} ---")
-            lines.append(f"Question: {q['question']}")
-            lines.append("Choices:")
-            for j, choice in enumerate(q["choices"]):
-                lines.append(f"  {j}: {choice}")
-            lines.append(f"Correct answer index: {q['correct_index']}")
-            lines.append("")
+        lines.extend(_format_question_lines(edited_review_cards))
 
     return "\n".join(lines)
 
