@@ -1,6 +1,6 @@
 import pytest
 
-from shuffler_core import split_choices
+from shuffler_core import split_choices, remove_choice
 
 
 def test_split_choices_n2_matches_two_way_split():
@@ -39,3 +39,20 @@ def test_split_choices_rejects_out_of_range_points():
         split_choices("Q", ["a", "b", "c", "d"], [0])
     with pytest.raises(ValueError):
         split_choices("Q", ["a", "b", "c", "d"], [4])
+
+
+def test_remove_choice_removes_item_at_index():
+    result = remove_choice(["a", "b", "c", "d", "e"], 1)
+    assert result == ["a", "c", "d", "e"]
+
+
+def test_remove_choice_rejects_removal_at_min_choices():
+    with pytest.raises(ValueError):
+        remove_choice(["a", "b", "c", "d"], 0)
+
+
+def test_remove_choice_allows_custom_min_choices():
+    result = remove_choice(["a", "b", "c"], 0, min_choices=2)
+    assert result == ["b", "c"]
+    with pytest.raises(ValueError):
+        remove_choice(["a", "b"], 0, min_choices=2)
