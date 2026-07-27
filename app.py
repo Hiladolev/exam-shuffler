@@ -3,9 +3,10 @@ from pdf2image import pdfinfo_from_path
 
 from test_ocr import run_ocr_all_pages, MIN_PAGE_TEXT_LENGTH, POPPLER_PATH
 from parser import strip_version_lines, parse_ocr_text, find_split_suggestions
-from shuffler_core import shuffle_questions, split_choices
+from shuffler_core import shuffle_questions, split_choices, remove_choice
 
 UPLOAD_PATH = "uploaded_exam.pdf"
+MIN_CHOICES = 4
 
 
 def run_pipeline(pdf_path):
@@ -62,6 +63,43 @@ def build_final_content(edited_clean, edited_review_cards):
     return "\n".join(lines)
 
 
+def render_question_editor(state, key_prefix):
+    question_text = st.text_area(
+        "Question text", value=state["question"], key=f"{key_prefix}_question"
+    )
+
+    choices = []
+    for j, choice in enumerate(state["choices"]):
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            choice_text = st.text_input(
+                f"Choice {j}", value=choice, key=f"{key_prefix}_choice_{j}"
+            )
+        with col2:
+            if st.button(
+                "Remove",
+                key=f"{key_prefix}_remove_{j}",
+                disabled=len(state["choices"]) <= MIN_CHOICES,
+            ):
+                state["choices"] = remove_choice(state["choices"], j, MIN_CHOICES)
+                st.rerun()
+        choices.append(choice_text)
+
+    if st.button("Add answer choice", key=f"{key_prefix}_add_choice"):
+        state["choices"].append("")
+        st.rerun()
+
+    correct_index = st.radio(
+        "Correct answer",
+        options=range(len(choices)),
+        format_func=lambda idx: f"{idx}: {choices[idx]}",
+        index=state.get("correct_index", 0),
+        key=f"{key_prefix}_correct_index",
+    )
+
+    return {"question": question_text, "choices": choices, "correct_index": correct_index}
+
+
 st.title("Exam Shuffler")
 
 st.markdown(
@@ -97,32 +135,7 @@ if st.session_state.get("processed"):
     edited_clean = []
     for i, q in enumerate(st.session_state["shuffled_questions"]):
         st.subheader(f"Question {i + 1}")
-        question_text = st.text_area(
-            "Question text", value=q["question"], key=f"clean_q_{i}"
-        )
-        choices = []
-        for j, choice in enumerate(q["choices"]):
-            choice_text = st.text_input(
-                f"Choice {j}", value=choice, key=f"clean_q_{i}_choice_{j}"
-            )
-            choices.append(choice_text)
-        if st.button("Add answer choice", key=f"clean_q_{i}_add_choice"):
-            q["choices"].append("")
-            st.rerun()
-        correct_index = st.radio(
-            "Correct answer",
-            options=range(len(choices)),
-            format_func=lambda idx: f"{idx}: {choices[idx]}",
-            index=q["correct_index"],
-            key=f"clean_q_{i}_correct_index",
-        )
-        edited_clean.append(
-            {
-                "question": question_text,
-                "choices": choices,
-                "correct_index": correct_index,
-            }
-        )
+        edited_clean.append(render_question_editor(q, key_prefix=f"clean_q_{i}"))
 
     st.header("Needs Review (flagged / merged questions)")
     edited_review_cards = []
