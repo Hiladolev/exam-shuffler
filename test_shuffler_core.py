@@ -1,6 +1,6 @@
 import pytest
 
-from shuffler_core import split_choices, remove_choice
+from shuffler_core import split_choices, remove_choice, shuffle_questions
 
 
 def test_split_choices_n2_matches_two_way_split():
@@ -56,3 +56,13 @@ def test_remove_choice_allows_custom_min_choices():
     assert result == ["b", "c"]
     with pytest.raises(ValueError):
         remove_choice(["a", "b"], 0, min_choices=2)
+
+
+def test_shuffle_questions_after_split_assigns_correct_index_to_each_part():
+    parts = split_choices("Q", ["a", "b", "c", "d", "e", "f"], [2, 4])
+    shuffled_parts = shuffle_questions(parts)
+
+    assert len(shuffled_parts) == 3
+    for part in shuffled_parts:
+        assert "correct_index" in part
+        assert 0 <= part["correct_index"] < len(part["choices"])
