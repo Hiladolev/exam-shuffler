@@ -165,8 +165,8 @@ if st.session_state.get("processed"):
                 elif any(not (0 < p < len(q["choices"])) for p in split_points):
                     st.error(f"Split points must be between 1 and {len(q['choices']) - 1}.")
                 else:
-                    st.session_state[split_key] = split_choices(
-                        q["question"], q["choices"], split_points
+                    st.session_state[split_key] = shuffle_questions(
+                        split_choices(q["question"], q["choices"], split_points)
                     )
                     st.rerun()
         else:
