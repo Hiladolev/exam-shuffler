@@ -1,6 +1,46 @@
 from unittest.mock import patch
 
+from streamlit.testing.v1 import AppTest
+
 import app
+
+
+def _make_processed_app_test():
+    at = AppTest.from_file("app.py")
+    at.session_state["processed"] = True
+    at.session_state["shuffled_questions"] = [
+        {
+            "question": "Sample question?",
+            "choices": ["A", "B", "C", "D", "E"],
+            "correct_index": 0,
+        }
+    ]
+    at.session_state["needs_review"] = []
+    at.run()
+    return at
+
+
+def test_remove_middle_choice_keeps_correct_text_at_correct_positions():
+    at = _make_processed_app_test()
+
+    at.button(key="clean_q_0_v0_remove_1").click().run()
+
+    remaining = [
+        at.text_input(key=f"clean_q_0_v1_choice_{j}").value for j in range(4)
+    ]
+    assert remaining == ["A", "C", "D", "E"]
+
+
+def test_remove_choice_preserves_unsaved_edit_to_another_choice():
+    at = _make_processed_app_test()
+
+    at.text_input(key="clean_q_0_v0_choice_0").set_value("A-fixed").run()
+    at.button(key="clean_q_0_v0_remove_4").click().run()
+
+    remaining = [
+        at.text_input(key=f"clean_q_0_v1_choice_{j}").value for j in range(4)
+    ]
+    assert remaining == ["A-fixed", "B", "C", "D"]
 
 
 def test_build_final_content_does_not_reshuffle_review_cards():

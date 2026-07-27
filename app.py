@@ -72,6 +72,7 @@ def render_question_editor(state, key_prefix):
     )
 
     choices = []
+    remove_index = None
     for j, choice in enumerate(state["choices"]):
         col1, col2 = st.columns([5, 1])
         with col1:
@@ -84,10 +85,13 @@ def render_question_editor(state, key_prefix):
                 key=f"{key_prefix}_v{version}_remove_{j}",
                 disabled=len(state["choices"]) <= MIN_CHOICES,
             ):
-                state["choices"] = remove_choice(state["choices"], j, MIN_CHOICES)
-                st.session_state[version_key] = version + 1
-                st.rerun()
+                remove_index = j
         choices.append(choice_text)
+
+    if remove_index is not None:
+        state["choices"] = remove_choice(choices, remove_index, MIN_CHOICES)
+        st.session_state[version_key] = version + 1
+        st.rerun()
 
     if st.button("Add answer choice", key=f"{key_prefix}_add_choice"):
         state["choices"].append("")
