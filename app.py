@@ -64,6 +64,9 @@ def build_final_content(edited_clean, edited_review_cards):
 
 
 def render_question_editor(state, key_prefix):
+    version_key = f"{key_prefix}_version"
+    version = st.session_state.setdefault(version_key, 0)
+
     question_text = st.text_area(
         "Question text", value=state["question"], key=f"{key_prefix}_question"
     )
@@ -73,15 +76,16 @@ def render_question_editor(state, key_prefix):
         col1, col2 = st.columns([5, 1])
         with col1:
             choice_text = st.text_input(
-                f"Choice {j}", value=choice, key=f"{key_prefix}_choice_{j}"
+                f"Choice {j}", value=choice, key=f"{key_prefix}_v{version}_choice_{j}"
             )
         with col2:
             if st.button(
                 "Remove",
-                key=f"{key_prefix}_remove_{j}",
+                key=f"{key_prefix}_v{version}_remove_{j}",
                 disabled=len(state["choices"]) <= MIN_CHOICES,
             ):
                 state["choices"] = remove_choice(state["choices"], j, MIN_CHOICES)
+                st.session_state[version_key] = version + 1
                 st.rerun()
         choices.append(choice_text)
 
