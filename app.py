@@ -107,9 +107,14 @@ def render_question_editor(state, key_prefix):
     version_key = f"{key_prefix}_version"
     version = st.session_state.setdefault(version_key, 0)
 
-    question_text = st.text_area(
-        "Question text", value=state["question"], key=f"{key_prefix}_question"
-    )
+    question_image = state.get("question_image")
+    if question_image:
+        st.image(question_image)
+        question_text = state["question"]
+    else:
+        question_text = st.text_area(
+            "Question text", value=state["question"], key=f"{key_prefix}_question"
+        )
 
     choices = []
     remove_index = None
@@ -157,7 +162,12 @@ def render_question_editor(state, key_prefix):
         key=f"{key_prefix}_v{version}_correct_index",
     )
 
-    return {"question": question_text, "choices": choices, "correct_index": correct_index}
+    return {
+        "question": question_text,
+        "choices": choices,
+        "correct_index": correct_index,
+        "question_image": question_image,
+    }
 
 
 st.title("Exam Shuffler")
