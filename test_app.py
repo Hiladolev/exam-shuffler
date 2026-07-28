@@ -341,3 +341,13 @@ def test_build_page_offsets_handles_trailing_newline_in_a_page():
 def test_build_page_offsets_single_page_has_offset_zero():
     kept_pages = [(2, "a\nb\nc")]
     assert app.build_page_offsets(kept_pages) == [(2, 0)]
+
+
+def test_build_page_offsets_handles_single_line_pages():
+    kept_pages = [(2, "solo"), (3, "next")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 2)]
+
+
+def test_build_page_offsets_handles_a_page_that_stripped_to_empty():
+    kept_pages = [(2, "l1\nl2"), (3, ""), (4, "m1\nm2")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 3), (4, 5)]
