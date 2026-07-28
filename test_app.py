@@ -248,3 +248,23 @@ def test_attach_question_images_falls_back_to_none_on_count_mismatch():
 
     assert parsed_questions[0]["question_image"] is None
     assert parsed_questions[1]["question_image"] is None
+
+
+def test_page_number_for_line_index_returns_first_page_for_index_zero():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 0) == 2
+
+
+def test_page_number_for_line_index_returns_correct_page_within_range():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 7) == 4
+
+
+def test_page_number_for_line_index_returns_correct_page_at_exact_boundary():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 6) == 4
+
+
+def test_page_number_for_line_index_returns_last_page_beyond_all_offsets():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 15) == 5

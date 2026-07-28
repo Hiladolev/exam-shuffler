@@ -23,6 +23,15 @@ UPLOAD_PATH = "uploaded_exam.pdf"
 MIN_CHOICES = 4
 
 
+def page_number_for_line_index(page_offsets, line_index):
+    result_page_number = page_offsets[0][0]
+    for page_number, start_index in page_offsets:
+        if start_index > line_index:
+            break
+        result_page_number = page_number
+    return result_page_number
+
+
 def attach_question_images(parsed_questions, page_bands):
     # Only attach images if the page-ordered band count exactly matches the
     # parsed-question count -- otherwise we can't be sure a given band lines
