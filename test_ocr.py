@@ -1,5 +1,6 @@
 from pdf2image import convert_from_path, pdfinfo_from_path
 import pytesseract
+from pytesseract import Output
 
 TESSERACT_CMD = r"C:\Users\hilad\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
 POPPLER_PATH = r"C:\poppler\poppler-26.02.0\Library\bin"
@@ -28,6 +29,34 @@ def run_ocr_all_pages(pdf_path, poppler_path=POPPLER_PATH):
     for page_number, image in zip(range(2, total_pages + 1), images):
         text = pytesseract.image_to_string(image, lang="heb+eng")
         yield page_number, text
+
+
+def _group_words_into_lines(data):
+    lines = {}
+    order = []
+    for i in range(len(data["text"])):
+        word = data["text"][i].strip()
+        if not word:
+            continue
+
+        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        top = data["top"][i]
+        bottom = top + data["height"][i]
+        if key not in lines:
+            lines[key] = {"words": [], "top": top, "bottom": bottom}
+            order.append(key)
+
+        entry = lines[key]
+        entry["words"].append((data["left"][i], word))
+        entry["top"] = min(entry["top"], top)
+        entry["bottom"] = max(entry["bottom"], bottom)
+
+    result = []
+    for key in order:
+        entry = lines[key]
+        text = " ".join(word for _, word in sorted(entry["words"], key=lambda pair: pair[0]))
+        result.append((text, entry["top"], entry["bottom"]))
+    return result
 
 
 if __name__ == "__main__":
