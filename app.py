@@ -64,6 +64,15 @@ def build_final_content(edited_clean, edited_review_cards):
 
 
 def render_question_editor(state, key_prefix):
+    # version_key forces a fresh widget identity (new key) for choice inputs,
+    # remove buttons, and the correct-answer radio whenever a choice is removed.
+    # Without it, the browser can keep showing a widget's old value/selection
+    # after its underlying index shifts, even though the Python-side value is
+    # already correct -- AppTest's `.value` assertions can't catch that class
+    # of bug since they only exercise the backend, not the real frontend.
+    # Add doesn't need a bump: it only appends, so existing indices/keys stay
+    # valid. The question-text key also doesn't need one: nothing ever
+    # recomputes state["question"] the way Remove/Add recompute correct_index.
     version_key = f"{key_prefix}_version"
     version = st.session_state.setdefault(version_key, 0)
 
