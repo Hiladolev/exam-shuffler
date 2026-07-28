@@ -1,8 +1,19 @@
 import streamlit as st
 from pdf2image import pdfinfo_from_path
 
-from test_ocr import run_ocr_all_pages, MIN_PAGE_TEXT_LENGTH, POPPLER_PATH
-from parser import strip_version_lines, parse_ocr_text, find_split_suggestions
+from test_ocr import (
+    run_ocr_all_pages,
+    run_line_extraction_all_pages,
+    crop_question_image,
+    MIN_PAGE_TEXT_LENGTH,
+    POPPLER_PATH,
+)
+from parser import (
+    strip_version_lines,
+    parse_ocr_text,
+    find_split_suggestions,
+    find_question_crop_bounds,
+)
 from shuffler_core import shuffle_questions, split_choices, remove_choice
 
 UPLOAD_PATH = "uploaded_exam.pdf"
@@ -27,6 +38,20 @@ def run_pipeline(pdf_path):
     raw_text = "\n\n".join(raw_texts)
     raw_text = strip_version_lines(raw_text)
     parsed_questions = parse_ocr_text(raw_text)
+
+    page_bands = []
+    for _, image, lines in run_line_extraction_all_pages(pdf_path):
+        for band in find_question_crop_bounds(lines):
+            page_bands.append((image, band))
+
+    if len(page_bands) == len(parsed_questions):
+        for question, (image, band) in zip(parsed_questions, page_bands):
+            question["question_image"] = (
+                crop_question_image(image, band[0], band[1]) if band is not None else None
+            )
+    else:
+        for question in parsed_questions:
+            question["question_image"] = None
 
     clean_questions = []
     needs_review = []
