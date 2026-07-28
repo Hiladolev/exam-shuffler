@@ -1,6 +1,7 @@
 import base64
 from unittest.mock import patch
 
+from PIL import Image
 from streamlit.testing.v1 import AppTest
 
 import app
@@ -219,3 +220,31 @@ def test_build_final_html_renders_review_cards_as_plain_text():
     assert "<p>Merged?</p>" in result
     assert "<li>2: z</li>" in result
     assert "Correct answer index: 2" in result
+
+
+def test_attach_question_images_matches_bands_to_questions_in_order():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    image_b = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"]},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"]},
+    ]
+    page_bands = [(image_a, (10, 30)), (image_b, None)]
+
+    app.attach_question_images(parsed_questions, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_falls_back_to_none_on_count_mismatch():
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"]},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"]},
+    ]
+    page_bands = [(Image.new("RGB", (100, 50)), (10, 30))]
+
+    app.attach_question_images(parsed_questions, page_bands)
+
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None

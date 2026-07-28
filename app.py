@@ -23,6 +23,20 @@ UPLOAD_PATH = "uploaded_exam.pdf"
 MIN_CHOICES = 4
 
 
+def attach_question_images(parsed_questions, page_bands):
+    # Only attach images if the page-ordered band count exactly matches the
+    # parsed-question count -- otherwise we can't be sure a given band lines
+    # up with the right question, so every question falls back to None.
+    if len(page_bands) == len(parsed_questions):
+        for question, (image, band) in zip(parsed_questions, page_bands):
+            question["question_image"] = (
+                crop_question_image(image, band[0], band[1]) if band is not None else None
+            )
+    else:
+        for question in parsed_questions:
+            question["question_image"] = None
+
+
 def run_pipeline(pdf_path):
     total_pages = pdfinfo_from_path(pdf_path, poppler_path=POPPLER_PATH)["Pages"]
     total_to_process = total_pages - 1
@@ -50,17 +64,7 @@ def run_pipeline(pdf_path):
         for band in find_question_crop_bounds(lines):
             page_bands.append((image, band))
 
-    # Only attach images if the page-ordered band count exactly matches the
-    # parsed-question count -- otherwise we can't be sure a given band lines
-    # up with the right question, so every question falls back to None.
-    if len(page_bands) == len(parsed_questions):
-        for question, (image, band) in zip(parsed_questions, page_bands):
-            question["question_image"] = (
-                crop_question_image(image, band[0], band[1]) if band is not None else None
-            )
-    else:
-        for question in parsed_questions:
-            question["question_image"] = None
+    attach_question_images(parsed_questions, page_bands)
 
     clean_questions = []
     needs_review = []
