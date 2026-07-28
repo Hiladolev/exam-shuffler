@@ -3,9 +3,10 @@ from pdf2image import pdfinfo_from_path
 
 from test_ocr import run_ocr_all_pages, MIN_PAGE_TEXT_LENGTH, POPPLER_PATH
 from parser import strip_version_lines, parse_ocr_text, find_split_suggestions
-from shuffler_core import shuffle_questions, split_choices
+from shuffler_core import shuffle_questions, split_choices, remove_choice
 
 UPLOAD_PATH = "uploaded_exam.pdf"
+MIN_CHOICES = 4
 
 
 def run_pipeline(pdf_path):
@@ -39,9 +40,9 @@ def run_pipeline(pdf_path):
     return shuffled_questions, needs_review
 
 
-def build_final_content(edited_clean, edited_review_cards):
+def _format_question_lines(questions):
     lines = []
-    for i, q in enumerate(edited_clean, start=1):
+    for i, q in enumerate(questions, start=1):
         lines.append(f"--- Question {i} ---")
         lines.append(f"Question: {q['question']}")
         lines.append("Choices:")
@@ -49,20 +50,83 @@ def build_final_content(edited_clean, edited_review_cards):
             lines.append(f"  {j}: {choice}")
         lines.append(f"Correct answer index: {q['correct_index']}")
         lines.append("")
+    return lines
+
+
+def build_final_content(edited_clean, edited_review_cards):
+    lines = _format_question_lines(edited_clean)
 
     if edited_review_cards:
-        shuffled_review_cards = shuffle_questions(edited_review_cards)
         lines.append("=== Reviewed (previously flagged) Questions ===")
-        for i, q in enumerate(shuffled_review_cards, start=1):
-            lines.append(f"--- Question {i} ---")
-            lines.append(f"Question: {q['question']}")
-            lines.append("Choices:")
-            for j, choice in enumerate(q["choices"]):
-                lines.append(f"  {j}: {choice}")
-            lines.append(f"Correct answer index: {q['correct_index']}")
-            lines.append("")
+        lines.extend(_format_question_lines(edited_review_cards))
 
     return "\n".join(lines)
+
+
+def render_question_editor(state, key_prefix):
+    # version_key forces a fresh widget identity (new key) for choice inputs,
+    # remove buttons, and the correct-answer radio whenever a choice is removed.
+    # Without it, the browser can keep showing a widget's old value/selection
+    # after its underlying index shifts, even though the Python-side value is
+    # already correct -- AppTest's `.value` assertions can't catch that class
+    # of bug since they only exercise the backend, not the real frontend.
+    # Add doesn't need a bump: it only appends, so existing indices/keys stay
+    # valid. The question-text key also doesn't need one: nothing ever
+    # recomputes state["question"] the way Remove/Add recompute correct_index.
+    version_key = f"{key_prefix}_version"
+    version = st.session_state.setdefault(version_key, 0)
+
+    question_text = st.text_area(
+        "Question text", value=state["question"], key=f"{key_prefix}_question"
+    )
+
+    choices = []
+    remove_index = None
+    for j, choice in enumerate(state["choices"]):
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            choice_text = st.text_input(
+                f"Choice {j}", value=choice, key=f"{key_prefix}_v{version}_choice_{j}"
+            )
+        with col2:
+            if st.button(
+                "Remove",
+                key=f"{key_prefix}_v{version}_remove_{j}",
+                disabled=len(state["choices"]) <= MIN_CHOICES,
+            ):
+                remove_index = j
+        choices.append(choice_text)
+
+    if remove_index is not None:
+        state["choices"] = remove_choice(choices, remove_index, MIN_CHOICES)
+        current_correct = st.session_state.get(
+            f"{key_prefix}_v{version}_correct_index", state.get("correct_index", 0)
+        )
+        if remove_index < current_correct:
+            state["correct_index"] = current_correct - 1
+        elif remove_index == current_correct:
+            state["correct_index"] = 0
+        else:
+            state["correct_index"] = current_correct
+        st.session_state[version_key] = version + 1
+        st.rerun()
+
+    if st.button("Add answer choice", key=f"{key_prefix}_add_choice"):
+        state["choices"].append("")
+        state["correct_index"] = st.session_state.get(
+            f"{key_prefix}_v{version}_correct_index", state.get("correct_index", 0)
+        )
+        st.rerun()
+
+    correct_index = st.radio(
+        "Correct answer",
+        options=range(len(choices)),
+        format_func=lambda idx: f"{idx}: {choices[idx]}",
+        index=state.get("correct_index", 0),
+        key=f"{key_prefix}_v{version}_correct_index",
+    )
+
+    return {"question": question_text, "choices": choices, "correct_index": correct_index}
 
 
 st.title("Exam Shuffler")
@@ -100,32 +164,7 @@ if st.session_state.get("processed"):
     edited_clean = []
     for i, q in enumerate(st.session_state["shuffled_questions"]):
         st.subheader(f"Question {i + 1}")
-        question_text = st.text_area(
-            "Question text", value=q["question"], key=f"clean_q_{i}"
-        )
-        choices = []
-        for j, choice in enumerate(q["choices"]):
-            choice_text = st.text_input(
-                f"Choice {j}", value=choice, key=f"clean_q_{i}_choice_{j}"
-            )
-            choices.append(choice_text)
-        if st.button("Add answer choice", key=f"clean_q_{i}_add_choice"):
-            q["choices"].append("")
-            st.rerun()
-        correct_index = st.radio(
-            "Correct answer",
-            options=range(len(choices)),
-            format_func=lambda idx: f"{idx}: {choices[idx]}",
-            index=q["correct_index"],
-            key=f"clean_q_{i}_correct_index",
-        )
-        edited_clean.append(
-            {
-                "question": question_text,
-                "choices": choices,
-                "correct_index": correct_index,
-            }
-        )
+        edited_clean.append(render_question_editor(q, key_prefix=f"clean_q_{i}"))
 
     st.header("Needs Review (flagged / merged questions)")
     edited_review_cards = []
@@ -165,28 +204,17 @@ if st.session_state.get("processed"):
                 elif any(not (0 < p < len(q["choices"])) for p in split_points):
                     st.error(f"Split points must be between 1 and {len(q['choices']) - 1}.")
                 else:
-                    st.session_state[split_key] = split_choices(
-                        q["question"], q["choices"], split_points
+                    st.session_state[split_key] = shuffle_questions(
+                        split_choices(q["question"], q["choices"], split_points)
                     )
                     st.rerun()
         else:
             split_cards = st.session_state[split_key]
             for c, card in enumerate(split_cards):
                 st.subheader(f"Flagged Question {i + 1} - Part {c + 1}")
-                question_text = st.text_area(
-                    "Question text",
-                    value=card["question"],
-                    key=f"review_{i}_part{c}_question",
+                edited_review_cards.append(
+                    render_question_editor(card, key_prefix=f"review_{i}_part{c}")
                 )
-                choices = []
-                for j, choice in enumerate(card["choices"]):
-                    choice_text = st.text_input(
-                        f"Choice {j}",
-                        value=choice,
-                        key=f"review_{i}_part{c}_choice_{j}",
-                    )
-                    choices.append(choice_text)
-                edited_review_cards.append({"question": question_text, "choices": choices})
 
     final_content = build_final_content(edited_clean, edited_review_cards)
     st.download_button(

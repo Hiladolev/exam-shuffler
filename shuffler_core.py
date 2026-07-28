@@ -19,6 +19,12 @@ def split_choices(question, choices, split_points):
     return parts
 
 
+def remove_choice(choices, index, min_choices=4):
+    if len(choices) <= min_choices:
+        raise ValueError(f"cannot remove choice: at least {min_choices} choices required")
+    return choices[:index] + choices[index + 1:]
+
+
 def shuffle_questions(questions):
     result = []
     for q in questions:
