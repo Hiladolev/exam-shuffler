@@ -93,7 +93,11 @@ def parse_ocr_text(text):
 
         question_text = " ".join(question_lines).strip()
         if question_text or choices:
-            questions.append({"question": question_text, "choices": choices})
+            questions.append({
+                "question": question_text,
+                "choices": choices,
+                "header_line_index": start,
+            })
 
     return questions
 

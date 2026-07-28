@@ -1,4 +1,4 @@
-from parser import find_question_crop_bounds, find_split_suggestions
+from parser import find_question_crop_bounds, find_split_suggestions, parse_ocr_text
 
 
 def test_no_header_matches_returns_empty_list():
@@ -78,3 +78,34 @@ def test_find_question_crop_bounds_consecutive_headers_with_no_choice_between():
         ("א. Paris", 75, 95),
     ]
     assert find_question_crop_bounds(lines) == [None, (45, 75)]
+
+
+def test_parse_ocr_text_records_header_line_index_including_leading_block():
+    text = "\n".join([
+        "some leading noise",
+        "שאלה מס' 1 (2 נק')",
+        "question body",
+        "א. Paris",
+        "ב. London",
+    ])
+    questions = parse_ocr_text(text)
+
+    assert len(questions) == 2
+    assert questions[0]["header_line_index"] == 0
+    assert questions[1]["header_line_index"] == 1
+
+
+def test_parse_ocr_text_records_header_line_index_for_multiple_questions():
+    text = "\n".join([
+        "שאלה מס' 1 (2 נק')",
+        "question one",
+        "א. Paris",
+        "שאלה מס' 2 (3 נק')",
+        "question two",
+        "א. Red",
+    ])
+    questions = parse_ocr_text(text)
+
+    assert len(questions) == 2
+    assert questions[0]["header_line_index"] == 0
+    assert questions[1]["header_line_index"] == 3
