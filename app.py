@@ -91,7 +91,7 @@ def render_question_editor(state, key_prefix):
     if remove_index is not None:
         state["choices"] = remove_choice(choices, remove_index, MIN_CHOICES)
         current_correct = st.session_state.get(
-            f"{key_prefix}_correct_index", state.get("correct_index", 0)
+            f"{key_prefix}_v{version}_correct_index", state.get("correct_index", 0)
         )
         if remove_index < current_correct:
             state["correct_index"] = current_correct - 1
@@ -105,7 +105,7 @@ def render_question_editor(state, key_prefix):
     if st.button("Add answer choice", key=f"{key_prefix}_add_choice"):
         state["choices"].append("")
         state["correct_index"] = st.session_state.get(
-            f"{key_prefix}_correct_index", state.get("correct_index", 0)
+            f"{key_prefix}_v{version}_correct_index", state.get("correct_index", 0)
         )
         st.rerun()
 
@@ -114,7 +114,7 @@ def render_question_editor(state, key_prefix):
         options=range(len(choices)),
         format_func=lambda idx: f"{idx}: {choices[idx]}",
         index=state.get("correct_index", 0),
-        key=f"{key_prefix}_correct_index",
+        key=f"{key_prefix}_v{version}_correct_index",
     )
 
     return {"question": question_text, "choices": choices, "correct_index": correct_index}
