@@ -319,3 +319,25 @@ def test_page_number_for_line_index_returns_correct_page_at_exact_boundary():
 def test_page_number_for_line_index_returns_last_page_beyond_all_offsets():
     page_offsets = [(2, 0), (4, 6), (5, 10)]
     assert app.page_number_for_line_index(page_offsets, 15) == 5
+
+
+def test_build_page_offsets_matches_worked_example_with_no_trailing_newlines():
+    kept_pages = [
+        (2, "l1\nl2\nl3\nl4\nl5"),
+        (4, "m1\nm2\nm3"),
+        (5, "n1\nn2\nn3\nn4"),
+    ]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (4, 6), (5, 10)]
+
+
+def test_build_page_offsets_handles_trailing_newline_in_a_page():
+    kept_pages = [
+        (2, "a\nb\n"),
+        (3, "c\nd"),
+    ]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 4)]
+
+
+def test_build_page_offsets_single_page_has_offset_zero():
+    kept_pages = [(2, "a\nb\nc")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0)]

@@ -23,6 +23,17 @@ UPLOAD_PATH = "uploaded_exam.pdf"
 MIN_CHOICES = 4
 
 
+def build_page_offsets(kept_pages):
+    page_offsets = []
+    next_line_index = 0
+    for page_number, stripped_text in kept_pages:
+        if page_offsets:
+            next_line_index += 2
+        page_offsets.append((page_number, next_line_index))
+        next_line_index += stripped_text.count("\n")
+    return page_offsets
+
+
 def page_number_for_line_index(page_offsets, line_index):
     result_page_number = page_offsets[0][0]
     for page_number, start_index in page_offsets:
@@ -63,21 +74,17 @@ def run_pipeline(pdf_path):
 
     progress = st.progress(0)
     status = st.empty()
-    raw_texts = []
-    page_offsets = []
-    next_line_index = 0
+    kept_pages = []
     for i, (page_number, text) in enumerate(run_ocr_all_pages(pdf_path), start=1):
         if len(text.strip()) >= MIN_PAGE_TEXT_LENGTH:
-            stripped_text = strip_version_lines(text)
-            page_offsets.append((page_number, next_line_index))
-            next_line_index += len(stripped_text.splitlines()) + 1
-            raw_texts.append(stripped_text)
+            kept_pages.append((page_number, strip_version_lines(text)))
         progress.progress(i / total_to_process)
         status.text(f"Processing page {i} of {total_to_process}")
     progress.empty()
     status.empty()
 
-    raw_text = "\n\n".join(raw_texts)
+    page_offsets = build_page_offsets(kept_pages)
+    raw_text = "\n\n".join(text for _, text in kept_pages)
     parsed_questions = parse_ocr_text(raw_text)
 
     progress = st.progress(0)
