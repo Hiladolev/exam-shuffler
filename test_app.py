@@ -193,6 +193,23 @@ def test_build_final_html_renders_text_fallback_when_no_question_image():
     assert "<img" not in result
 
 
+def test_build_final_html_escapes_html_special_characters():
+    edited_clean = [
+        {
+            "question": "What does <b>bold</b> & \"quotes\" do?",
+            "choices": ["<script>alert(1)</script>", "b", "c", "d"],
+            "correct_index": 0,
+            "question_image": None,
+        },
+    ]
+    result = app.build_final_html(edited_clean, [])
+
+    assert "<script>" not in result
+    assert "&lt;script&gt;" in result
+    assert "<b>bold</b>" not in result
+    assert "&lt;b&gt;bold&lt;/b&gt;" in result
+
+
 def test_build_final_html_renders_review_cards_as_plain_text():
     edited_review_cards = [
         {"question": "Merged?", "choices": ["x", "y", "z", "w"], "correct_index": 2},
