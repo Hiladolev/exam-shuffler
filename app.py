@@ -90,9 +90,15 @@ def render_question_editor(state, key_prefix):
 
     if remove_index is not None:
         state["choices"] = remove_choice(choices, remove_index, MIN_CHOICES)
-        state["correct_index"] = st.session_state.get(
+        current_correct = st.session_state.get(
             f"{key_prefix}_correct_index", state.get("correct_index", 0)
         )
+        if remove_index < current_correct:
+            state["correct_index"] = current_correct - 1
+        elif remove_index == current_correct:
+            state["correct_index"] = 0
+        else:
+            state["correct_index"] = current_correct
         st.session_state[version_key] = version + 1
         st.rerun()
 

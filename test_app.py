@@ -61,6 +61,28 @@ def test_remove_choice_preserves_selected_correct_answer():
     assert at.radio(key="clean_q_0_correct_index").value == 2
 
 
+def test_remove_choice_before_correct_answer_shifts_correct_index_down():
+    at = _make_processed_app_test()
+
+    at.radio(key="clean_q_0_correct_index").set_value(2).run()
+    at.button(key="clean_q_0_v0_remove_0").click().run()
+
+    remaining = [
+        at.text_input(key=f"clean_q_0_v1_choice_{j}").value for j in range(4)
+    ]
+    assert remaining == ["B", "C", "D", "E"]
+    assert at.radio(key="clean_q_0_correct_index").value == 1
+
+
+def test_remove_the_correct_choice_itself_resets_correct_index_to_zero():
+    at = _make_processed_app_test()
+
+    at.radio(key="clean_q_0_correct_index").set_value(2).run()
+    at.button(key="clean_q_0_v0_remove_2").click().run()
+
+    assert at.radio(key="clean_q_0_correct_index").value == 0
+
+
 def test_build_final_content_does_not_reshuffle_review_cards():
     edited_review_cards = [
         {"question": "Q1", "choices": ["x", "y", "z"], "correct_index": 2},
