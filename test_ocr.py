@@ -59,6 +59,11 @@ def _group_words_into_lines(data):
     return result
 
 
+def extract_line_boxes(image):
+    data = pytesseract.image_to_data(image, lang="heb+eng", output_type=Output.DICT)
+    return _group_words_into_lines(data)
+
+
 if __name__ == "__main__":
     pdf_path = "sample_exams/data_science_test_havana.pdf"
     pages = convert_from_path(pdf_path, poppler_path=POPPLER_PATH)
