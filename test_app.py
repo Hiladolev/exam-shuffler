@@ -263,6 +263,29 @@ def test_attach_question_images_handles_none_band_within_a_matched_page():
     assert parsed_questions[1]["question_image"] is None
 
 
+def test_attach_question_images_never_misattributes_when_per_page_miscounts_cancel_globally():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0), (3, 10)]
+    # Page 2 has 1 question but 2 bands (a phantom extra band); page 3 has 1
+    # question but 0 bands (a missing band). Globally that's 2 questions vs
+    # 2 bands -- which would match under a whole-document count check, even
+    # though neither page individually lines up. That's exactly the "totals
+    # cancel out" scenario this per-page check exists to prevent.
+    page_bands = [
+        (2, image_a, (5, 8)),
+        (2, image_a, (9, 12)),
+    ]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None
+
+
 def test_attach_question_images_ignores_bands_on_a_page_with_no_questions():
     parsed_questions = [
         {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
