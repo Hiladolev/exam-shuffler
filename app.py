@@ -41,9 +41,15 @@ def run_pipeline(pdf_path):
 
     page_bands = []
     for _, image, lines in run_line_extraction_all_pages(pdf_path):
+        page_text_length = sum(len(text) for text, _, _ in lines)
+        if page_text_length < MIN_PAGE_TEXT_LENGTH:
+            continue
         for band in find_question_crop_bounds(lines):
             page_bands.append((image, band))
 
+    # Only attach images if the page-ordered band count exactly matches the
+    # parsed-question count -- otherwise we can't be sure a given band lines
+    # up with the right question, so every question falls back to None.
     if len(page_bands) == len(parsed_questions):
         for question, (image, band) in zip(parsed_questions, page_bands):
             question["question_image"] = (
