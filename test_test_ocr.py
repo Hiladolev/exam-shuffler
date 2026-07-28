@@ -5,9 +5,9 @@ from PIL import Image
 from test_ocr import _group_words_into_lines, crop_question_image
 
 
-def test_group_words_into_lines_joins_words_and_computes_bounding_box():
+def test_group_words_into_lines_joins_words_in_right_to_left_order():
     data = {
-        "text": ["Hello", "world", "", "Second", "line"],
+        "text": ["World", "Hello", "", "Line", "Second"],
         "left": [10, 60, 0, 10, 70],
         "top": [100, 102, 0, 150, 148],
         "width": [40, 50, 0, 45, 40],
@@ -20,8 +20,8 @@ def test_group_words_into_lines_joins_words_and_computes_bounding_box():
     result = _group_words_into_lines(data)
 
     assert result == [
-        ("Hello world", 100, 120),
-        ("Second line", 148, 172),
+        ("Hello World", 100, 120),
+        ("Second Line", 148, 172),
     ]
 
 

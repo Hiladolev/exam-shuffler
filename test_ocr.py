@@ -68,7 +68,7 @@ def _group_words_into_lines(data):
     result = []
     for key in order:
         entry = lines[key]
-        text = " ".join(word for _, word in sorted(entry["words"], key=lambda pair: pair[0]))
+        text = " ".join(word for _, word in sorted(entry["words"], key=lambda pair: pair[0], reverse=True))
         result.append((text, entry["top"], entry["bottom"]))
     return result
 
