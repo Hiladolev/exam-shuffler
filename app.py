@@ -63,6 +63,10 @@ def run_pipeline(pdf_path):
     needs_review = []
     for q in parsed_questions:
         if len(q["choices"]) == 0 or len(q["choices"]) > 5:
+            # Flagged/needs-review questions always show plain OCR'd text in this
+            # phase (Phase 2 will extend cropping to them) -- clear any image a
+            # header/choice band happened to produce so it can never leak through.
+            q["question_image"] = None
             needs_review.append(q)
         else:
             clean_questions.append(q)
