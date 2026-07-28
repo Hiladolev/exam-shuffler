@@ -1,3 +1,4 @@
+import base64
 from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
@@ -161,4 +162,43 @@ def test_build_final_content_does_not_reshuffle_review_cards():
     assert "  0: x" in result
     assert "  1: y" in result
     assert "  2: z" in result
+    assert "Correct answer index: 2" in result
+
+
+def test_build_final_html_renders_image_tag_when_question_image_present():
+    edited_clean = [
+        {
+            "question": "ignored text",
+            "choices": ["a", "b", "c", "d"],
+            "correct_index": 1,
+            "question_image": b"FAKEPNGBYTES",
+        },
+    ]
+    result = app.build_final_html(edited_clean, [])
+
+    expected_b64 = base64.b64encode(b"FAKEPNGBYTES").decode("ascii")
+    assert f'<img src="data:image/png;base64,{expected_b64}">' in result
+    assert "ignored text" not in result
+    assert "<li>0: a</li>" in result
+    assert "Correct answer index: 1" in result
+
+
+def test_build_final_html_renders_text_fallback_when_no_question_image():
+    edited_clean = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "correct_index": 0, "question_image": None},
+    ]
+    result = app.build_final_html(edited_clean, [])
+
+    assert "<p>Q1</p>" in result
+    assert "<img" not in result
+
+
+def test_build_final_html_renders_review_cards_as_plain_text():
+    edited_review_cards = [
+        {"question": "Merged?", "choices": ["x", "y", "z", "w"], "correct_index": 2},
+    ]
+    result = app.build_final_html([], edited_review_cards)
+
+    assert "<p>Merged?</p>" in result
+    assert "<li>2: z</li>" in result
     assert "Correct answer index: 2" in result

@@ -1,3 +1,6 @@
+import base64
+import html
+
 import streamlit as st
 from pdf2image import pdfinfo_from_path
 
@@ -96,6 +99,58 @@ def build_final_content(edited_clean, edited_review_cards):
         lines.extend(_format_question_lines(edited_review_cards))
 
     return "\n".join(lines)
+
+
+def _render_question_html(q, index):
+    lines = [f"<h3>Question {index}</h3>"]
+    if q.get("question_image"):
+        b64 = base64.b64encode(q["question_image"]).decode("ascii")
+        lines.append(f'<img src="data:image/png;base64,{b64}">')
+    else:
+        lines.append(f"<p>{html.escape(q['question'])}</p>")
+    lines.append("<ul>")
+    for j, choice in enumerate(q["choices"]):
+        lines.append(f"<li>{j}: {html.escape(choice)}</li>")
+    lines.append("</ul>")
+    lines.append(f"<p>Correct answer index: {q['correct_index']}</p>")
+    return "\n".join(lines)
+
+
+def _render_review_card_html(q, index):
+    lines = [
+        f"<h3>Flagged Question {index}</h3>",
+        f"<p>{html.escape(q['question'])}</p>",
+        "<ul>",
+    ]
+    for j, choice in enumerate(q["choices"]):
+        lines.append(f"<li>{j}: {html.escape(choice)}</li>")
+    lines.append("</ul>")
+    lines.append(f"<p>Correct answer index: {q['correct_index']}</p>")
+    return "\n".join(lines)
+
+
+def build_final_html(edited_clean, edited_review_cards):
+    body_parts = [_render_question_html(q, i) for i, q in enumerate(edited_clean, start=1)]
+
+    if edited_review_cards:
+        body_parts.append("<h2>Reviewed (previously flagged) Questions</h2>")
+        body_parts.extend(
+            _render_review_card_html(q, i) for i, q in enumerate(edited_review_cards, start=1)
+        )
+
+    body = "\n".join(body_parts)
+    return f"""<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<style>
+body {{ direction: rtl; font-family: sans-serif; }}
+</style>
+</head>
+<body>
+{body}
+</body>
+</html>"""
 
 
 def render_question_editor(state, key_prefix):
