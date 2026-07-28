@@ -8,6 +8,7 @@ CHOICE_PATTERN = re.compile(r"^\s*([אבגדה])\.\s*(.*)$")
 VERSION_PATTERN = re.compile(r"מספר\s*גרסה\s*:\s*\d+")
 PAGE_NUMBER_PATTERN = re.compile(r"מספר\s*עמוד\s*:?\s*\d+")
 BIDI_MARK_PATTERN = re.compile(r"[‎‏‪-‮⁦-⁩]")
+MIN_CROP_BAND_HEIGHT = 10
 
 
 def is_header_line(line):
@@ -20,6 +21,23 @@ def find_split_suggestions(choices):
         if HEADER_PATTERN.search(choice):
             suggestions.add(j + 1)
     return sorted(suggestions)
+
+
+def find_question_crop_bounds(lines):
+    bounds = []
+    for i, (text, _, header_bottom) in enumerate(lines):
+        if not is_header_line(text):
+            continue
+
+        band = None
+        for choice_text, choice_top, _ in lines[i + 1:]:
+            if CHOICE_PATTERN.match(choice_text):
+                if choice_top - header_bottom >= MIN_CROP_BAND_HEIGHT:
+                    band = (header_bottom, choice_top)
+                break
+        bounds.append(band)
+
+    return bounds
 
 
 def strip_bidi_marks(text):
