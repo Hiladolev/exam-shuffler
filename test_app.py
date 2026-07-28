@@ -222,32 +222,60 @@ def test_build_final_html_renders_review_cards_as_plain_text():
     assert "Correct answer index: 2" in result
 
 
-def test_attach_question_images_matches_bands_to_questions_in_order():
+def test_attach_question_images_matched_page_keeps_image_when_another_page_mismatches():
     image_a = Image.new("RGB", (100, 50), color="white")
     image_b = Image.new("RGB", (100, 50), color="white")
     parsed_questions = [
-        {"question": "Q1", "choices": ["a", "b", "c", "d"]},
-        {"question": "Q2", "choices": ["a", "b", "c", "d"]},
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+        {"question": "Q3", "choices": ["a", "b", "c", "d"], "header_line_index": 11},
     ]
-    page_bands = [(image_a, (10, 30)), (image_b, None)]
+    page_offsets = [(2, 0), (3, 10)]
+    # Page 2 has one question and one matching band -> should get an image.
+    # Page 3 has two questions but only one band -> mismatch, both fall back to None.
+    page_bands = [
+        (2, image_a, (5, 8)),
+        (3, image_b, (12, 15)),
+    ]
 
-    app.attach_question_images(parsed_questions, page_bands)
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is None
+    assert parsed_questions[2]["question_image"] is None
+
+
+def test_attach_question_images_handles_none_band_within_a_matched_page():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 5},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [
+        (2, image_a, (5, 30)),
+        (2, image_a, None),
+    ]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
 
     assert parsed_questions[0]["question_image"] is not None
     assert parsed_questions[1]["question_image"] is None
 
 
-def test_attach_question_images_falls_back_to_none_on_count_mismatch():
+def test_attach_question_images_ignores_bands_on_a_page_with_no_questions():
     parsed_questions = [
-        {"question": "Q1", "choices": ["a", "b", "c", "d"]},
-        {"question": "Q2", "choices": ["a", "b", "c", "d"]},
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
     ]
-    page_bands = [(Image.new("RGB", (100, 50)), (10, 30))]
+    page_offsets = [(2, 0), (3, 10)]
+    page_bands = [
+        (2, Image.new("RGB", (100, 50)), (5, 8)),
+        (3, Image.new("RGB", (100, 50)), (5, 8)),
+    ]
 
-    app.attach_question_images(parsed_questions, page_bands)
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
 
-    assert parsed_questions[0]["question_image"] is None
-    assert parsed_questions[1]["question_image"] is None
+    assert parsed_questions[0]["question_image"] is not None
 
 
 def test_page_number_for_line_index_returns_first_page_for_index_zero():

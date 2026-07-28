@@ -32,18 +32,29 @@ def page_number_for_line_index(page_offsets, line_index):
     return result_page_number
 
 
-def attach_question_images(parsed_questions, page_bands):
-    # Only attach images if the page-ordered band count exactly matches the
-    # parsed-question count -- otherwise we can't be sure a given band lines
-    # up with the right question, so every question falls back to None.
-    if len(page_bands) == len(parsed_questions):
-        for question, (image, band) in zip(parsed_questions, page_bands):
-            question["question_image"] = (
-                crop_question_image(image, band[0], band[1]) if band is not None else None
-            )
-    else:
-        for question in parsed_questions:
-            question["question_image"] = None
+def attach_question_images(parsed_questions, page_offsets, page_bands):
+    questions_by_page = {}
+    for question in parsed_questions:
+        page_number = page_number_for_line_index(page_offsets, question["header_line_index"])
+        questions_by_page.setdefault(page_number, []).append(question)
+
+    bands_by_page = {}
+    for page_number, image, band in page_bands:
+        bands_by_page.setdefault(page_number, []).append((image, band))
+
+    for page_number, page_questions in questions_by_page.items():
+        bands = bands_by_page.get(page_number, [])
+        # Only attach images if this page's band count exactly matches its
+        # question count -- otherwise we can't be sure a given band lines up
+        # with the right question, so this page's questions fall back to None.
+        if len(bands) == len(page_questions):
+            for question, (image, band) in zip(page_questions, bands):
+                question["question_image"] = (
+                    crop_question_image(image, band[0], band[1]) if band is not None else None
+                )
+        else:
+            for question in page_questions:
+                question["question_image"] = None
 
 
 def run_pipeline(pdf_path):
