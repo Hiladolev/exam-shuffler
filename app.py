@@ -203,20 +203,9 @@ if st.session_state.get("processed"):
             split_cards = st.session_state[split_key]
             for c, card in enumerate(split_cards):
                 st.subheader(f"Flagged Question {i + 1} - Part {c + 1}")
-                question_text = st.text_area(
-                    "Question text",
-                    value=card["question"],
-                    key=f"review_{i}_part{c}_question",
+                edited_review_cards.append(
+                    render_question_editor(card, key_prefix=f"review_{i}_part{c}")
                 )
-                choices = []
-                for j, choice in enumerate(card["choices"]):
-                    choice_text = st.text_input(
-                        f"Choice {j}",
-                        value=choice,
-                        key=f"review_{i}_part{c}_choice_{j}",
-                    )
-                    choices.append(choice_text)
-                edited_review_cards.append({"question": question_text, "choices": choices})
 
     final_content = build_final_content(edited_clean, edited_review_cards)
     st.download_button(
