@@ -64,32 +64,36 @@ def run_pipeline(pdf_path):
     progress = st.progress(0)
     status = st.empty()
     raw_texts = []
+    page_offsets = []
+    next_line_index = 0
     for i, (page_number, text) in enumerate(run_ocr_all_pages(pdf_path), start=1):
         if len(text.strip()) >= MIN_PAGE_TEXT_LENGTH:
-            raw_texts.append(text)
+            stripped_text = strip_version_lines(text)
+            page_offsets.append((page_number, next_line_index))
+            next_line_index += len(stripped_text.splitlines()) + 1
+            raw_texts.append(stripped_text)
         progress.progress(i / total_to_process)
         status.text(f"Processing page {i} of {total_to_process}")
     progress.empty()
     status.empty()
 
     raw_text = "\n\n".join(raw_texts)
-    raw_text = strip_version_lines(raw_text)
     parsed_questions = parse_ocr_text(raw_text)
 
     progress = st.progress(0)
     status = st.empty()
     page_bands = []
-    for i, (_, image, lines) in enumerate(run_line_extraction_all_pages(pdf_path), start=1):
+    for i, (page_number, image, lines) in enumerate(run_line_extraction_all_pages(pdf_path), start=1):
         page_text_length = sum(len(text) for text, _, _ in lines)
         if page_text_length >= MIN_PAGE_TEXT_LENGTH:
             for band in find_question_crop_bounds(lines):
-                page_bands.append((image, band))
+                page_bands.append((page_number, image, band))
         progress.progress(i / total_to_process)
         status.text(f"Extracting question images: page {i} of {total_to_process}")
     progress.empty()
     status.empty()
 
-    attach_question_images(parsed_questions, page_bands)
+    attach_question_images(parsed_questions, page_offsets, page_bands)
 
     clean_questions = []
     needs_review = []
