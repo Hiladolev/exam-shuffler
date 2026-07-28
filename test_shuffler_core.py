@@ -66,3 +66,17 @@ def test_shuffle_questions_after_split_assigns_correct_index_to_each_part():
     for part in shuffled_parts:
         assert "correct_index" in part
         assert 0 <= part["correct_index"] < len(part["choices"])
+
+
+def test_shuffle_questions_carries_question_image_through_unchanged():
+    questions = [
+        {"question": "Q", "choices": ["a", "b", "c", "d"], "question_image": b"PNGDATA"},
+    ]
+    shuffled = shuffle_questions(questions)
+    assert shuffled[0]["question_image"] == b"PNGDATA"
+
+
+def test_shuffle_questions_defaults_question_image_to_none_when_absent():
+    questions = [{"question": "Q", "choices": ["a", "b", "c", "d"]}]
+    shuffled = shuffle_questions(questions)
+    assert shuffled[0]["question_image"] is None

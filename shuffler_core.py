@@ -36,6 +36,7 @@ def shuffle_questions(questions):
             "question": q["question"],
             "choices": shuffled_choices,
             "correct_index": correct_index,
+            "question_image": q.get("question_image"),
         })
     return result
 
