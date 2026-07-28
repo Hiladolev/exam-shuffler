@@ -316,10 +316,10 @@ if st.session_state.get("processed"):
                     render_question_editor(card, key_prefix=f"review_{i}_part{c}")
                 )
 
-    final_content = build_final_content(edited_clean, edited_review_cards)
+    final_html = build_final_html(edited_clean, edited_review_cards)
     st.download_button(
         "Generate Final File",
-        data=final_content.encode("utf-8"),
-        file_name="final_exam.txt",
-        mime="text/plain",
+        data=final_html.encode("utf-8"),
+        file_name="final_exam.html",
+        mime="text/html",
     )
