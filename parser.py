@@ -31,6 +31,8 @@ def find_question_crop_bounds(lines):
 
         band = None
         for choice_text, choice_top, _ in lines[i + 1:]:
+            if is_header_line(choice_text):
+                break
             if CHOICE_PATTERN.match(choice_text):
                 if choice_top - header_bottom >= MIN_CROP_BAND_HEIGHT:
                     band = (header_bottom, choice_top)

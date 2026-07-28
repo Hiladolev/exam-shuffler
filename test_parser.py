@@ -68,3 +68,13 @@ def test_find_question_crop_bounds_band_shorter_than_minimum_height():
         ("א. Paris", 22, 40),
     ]
     assert find_question_crop_bounds(lines) == [None]
+
+
+def test_find_question_crop_bounds_consecutive_headers_with_no_choice_between():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("שאלה מס' 6 (3 נק')", 25, 45),
+        ("question six text", 50, 70),
+        ("א. Paris", 75, 95),
+    ]
+    assert find_question_crop_bounds(lines) == [None, (45, 75)]
