@@ -1,4 +1,9 @@
-from parser import find_question_crop_bounds, find_split_suggestions, parse_ocr_text
+from parser import (
+    find_question_crop_bounds,
+    find_split_suggestions,
+    parse_ocr_text,
+    strip_version_lines,
+)
 
 
 def test_no_header_matches_returns_empty_list():
@@ -109,3 +114,15 @@ def test_parse_ocr_text_records_header_line_index_for_multiple_questions():
     assert len(questions) == 2
     assert questions[0]["header_line_index"] == 0
     assert questions[1]["header_line_index"] == 3
+
+
+def test_strip_version_lines_per_page_matches_joined_stripping():
+    pages = [
+        "page one text\nמספר גרסה: 5\nmore content",
+        "page two text\nmore content",
+    ]
+
+    joined_then_stripped = strip_version_lines("\n\n".join(pages))
+    stripped_then_joined = "\n\n".join(strip_version_lines(p) for p in pages)
+
+    assert joined_then_stripped == stripped_then_joined
