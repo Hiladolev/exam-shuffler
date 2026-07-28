@@ -56,13 +56,18 @@ def run_pipeline(pdf_path):
     raw_text = strip_version_lines(raw_text)
     parsed_questions = parse_ocr_text(raw_text)
 
+    progress = st.progress(0)
+    status = st.empty()
     page_bands = []
-    for _, image, lines in run_line_extraction_all_pages(pdf_path):
+    for i, (_, image, lines) in enumerate(run_line_extraction_all_pages(pdf_path), start=1):
         page_text_length = sum(len(text) for text, _, _ in lines)
-        if page_text_length < MIN_PAGE_TEXT_LENGTH:
-            continue
-        for band in find_question_crop_bounds(lines):
-            page_bands.append((image, band))
+        if page_text_length >= MIN_PAGE_TEXT_LENGTH:
+            for band in find_question_crop_bounds(lines):
+                page_bands.append((image, band))
+        progress.progress(i / total_to_process)
+        status.text(f"Extracting question images: page {i} of {total_to_process}")
+    progress.empty()
+    status.empty()
 
     attach_question_images(parsed_questions, page_bands)
 
