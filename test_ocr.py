@@ -33,6 +33,18 @@ def run_ocr_all_pages(pdf_path, poppler_path=POPPLER_PATH):
         yield page_number, text
 
 
+def run_line_extraction_all_pages(pdf_path, poppler_path=POPPLER_PATH):
+    total_pages = pdfinfo_from_path(pdf_path, poppler_path=poppler_path)["Pages"]
+    if total_pages < 2:
+        return
+    images = convert_from_path(
+        pdf_path, first_page=2, last_page=total_pages, poppler_path=poppler_path
+    )
+    for page_number, image in zip(range(2, total_pages + 1), images):
+        lines = extract_line_boxes(image)
+        yield page_number, image, lines
+
+
 def _group_words_into_lines(data):
     lines = {}
     order = []
