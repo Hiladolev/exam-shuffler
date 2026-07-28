@@ -1,3 +1,5 @@
+import io
+
 from pdf2image import convert_from_path, pdfinfo_from_path
 import pytesseract
 from pytesseract import Output
@@ -62,6 +64,16 @@ def _group_words_into_lines(data):
 def extract_line_boxes(image):
     data = pytesseract.image_to_data(image, lang="heb+eng", output_type=Output.DICT)
     return _group_words_into_lines(data)
+
+
+def crop_question_image(image, top_px, bottom_px, padding=5):
+    width, height = image.size
+    top = max(0, top_px - padding)
+    bottom = min(height, bottom_px + padding)
+    cropped = image.crop((0, top, width, bottom))
+    buffer = io.BytesIO()
+    cropped.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 if __name__ == "__main__":

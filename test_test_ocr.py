@@ -1,4 +1,8 @@
-from test_ocr import _group_words_into_lines
+import io
+
+from PIL import Image
+
+from test_ocr import _group_words_into_lines, crop_question_image
 
 
 def test_group_words_into_lines_joins_words_and_computes_bounding_box():
@@ -34,3 +38,22 @@ def test_group_words_into_lines_skips_empty_words():
     }
 
     assert _group_words_into_lines(data) == [("Real", 10, 25)]
+
+
+def test_crop_question_image_returns_png_bytes_for_band():
+    image = Image.new("RGB", (200, 300), color="white")
+
+    png_bytes = crop_question_image(image, top_px=100, bottom_px=150, padding=5)
+    cropped = Image.open(io.BytesIO(png_bytes))
+
+    assert cropped.format == "PNG"
+    assert cropped.size == (200, 60)
+
+
+def test_crop_question_image_clamps_padding_to_image_bounds():
+    image = Image.new("RGB", (200, 300), color="white")
+
+    png_bytes = crop_question_image(image, top_px=2, bottom_px=298, padding=10)
+    cropped = Image.open(io.BytesIO(png_bytes))
+
+    assert cropped.size == (200, 300)
