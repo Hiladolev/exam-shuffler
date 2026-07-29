@@ -3,6 +3,8 @@ from parser import (
     find_split_suggestions,
     parse_ocr_text,
     strip_version_lines,
+    find_header_line_indices,
+    is_probable_embedded_header,
 )
 
 
@@ -126,3 +128,30 @@ def test_strip_version_lines_per_page_matches_joined_stripping():
     stripped_then_joined = "\n\n".join(strip_version_lines(p) for p in pages)
 
     assert joined_then_stripped == stripped_then_joined
+
+
+def test_find_header_line_indices_returns_indices_of_header_lines():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("א. Paris", 25, 45),
+        ("שאלה מס' 6 (3 נק')", 50, 70),
+        ("א. Red", 75, 95),
+    ]
+    assert find_header_line_indices(lines) == [0, 2]
+
+
+def test_find_header_line_indices_empty_when_no_headers():
+    lines = [("just prose", 0, 20), ("more prose", 25, 45)]
+    assert find_header_line_indices(lines) == []
+
+
+def test_is_probable_embedded_header_true_when_token_and_digit_present():
+    assert is_probable_embedded_header("שאלה 'on' 19 (5 בק')") is True
+
+
+def test_is_probable_embedded_header_false_without_the_token():
+    assert is_probable_embedded_header("regular continuation text with 19 in it") is False
+
+
+def test_is_probable_embedded_header_false_without_a_digit():
+    assert is_probable_embedded_header("שאלה בלי מספר בכלל") is False

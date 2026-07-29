@@ -9,10 +9,20 @@ VERSION_PATTERN = re.compile(r"מספר\s*גרסה\s*:\s*\d+")
 PAGE_NUMBER_PATTERN = re.compile(r"מספר\s*עמוד\s*:?\s*\d+")
 BIDI_MARK_PATTERN = re.compile(r"[‎‏‪-‮⁦-⁩]")
 MIN_CROP_BAND_HEIGHT = 10
+EMBEDDED_HEADER_TOKEN = "שאלה"
+DIGIT_PATTERN = re.compile(r"\d")
 
 
 def is_header_line(line):
     return bool(HEADER_PATTERN.search(line)) or bool(POINTS_PATTERN.search(line))
+
+
+def is_probable_embedded_header(line):
+    return EMBEDDED_HEADER_TOKEN in line and bool(DIGIT_PATTERN.search(line))
+
+
+def find_header_line_indices(lines):
+    return [i for i, (text, _, _) in enumerate(lines) if is_header_line(text)]
 
 
 def find_split_suggestions(choices):
