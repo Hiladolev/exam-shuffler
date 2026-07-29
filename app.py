@@ -7,6 +7,7 @@ from pdf2image import pdfinfo_from_path
 from test_ocr import (
     run_ocr_all_pages,
     run_line_extraction_all_pages,
+    extract_line_boxes,
     crop_question_image,
     MIN_PAGE_TEXT_LENGTH,
     POPPLER_PATH,
@@ -21,6 +22,7 @@ from shuffler_core import shuffle_questions, split_choices, remove_choice
 
 UPLOAD_PATH = "uploaded_exam.pdf"
 MIN_CHOICES = 4
+RETRY_LINE_EXTRACTION_CONFIG = "--psm 12"
 
 
 def build_page_offsets(kept_pages):
@@ -43,7 +45,9 @@ def page_number_for_line_index(page_offsets, line_index):
     return result_page_number
 
 
-def attach_question_images(parsed_questions, page_offsets, page_bands):
+def attach_question_images(parsed_questions, page_offsets, page_bands, page_images=None):
+    page_images = page_images or {}
+
     questions_by_page = {}
     for question in parsed_questions:
         page_number = page_number_for_line_index(page_offsets, question["header_line_index"])
@@ -55,6 +59,22 @@ def attach_question_images(parsed_questions, page_offsets, page_bands):
 
     for page_number, page_questions in questions_by_page.items():
         bands = bands_by_page.get(page_number, [])
+
+        # A count mismatch on the default pass may just mean Tesseract's
+        # default page segmentation dropped a header line entirely (seen in
+        # practice: a clean, non-overlapping header line missing from both
+        # OCR passes over the full page). Retry that one page at a sparser
+        # segmentation mode, but only ever trust the retry if it finds at
+        # least as many headers as the default pass did -- otherwise keep
+        # the default result and fall through to the same safe None
+        # fallback as before.
+        if len(bands) != len(page_questions) and page_number in page_images:
+            image = page_images[page_number]
+            retried_lines = extract_line_boxes(image, config=RETRY_LINE_EXTRACTION_CONFIG)
+            retried_bounds = find_question_crop_bounds(retried_lines)
+            if len(retried_bounds) >= len(bands):
+                bands = [(image, band) for band in retried_bounds]
+
         # Only attach images if this page's band count exactly matches its
         # question count -- otherwise we can't be sure a given band lines up
         # with the right question, so this page's questions fall back to None.
@@ -90,9 +110,11 @@ def run_pipeline(pdf_path):
     progress = st.progress(0)
     status = st.empty()
     page_bands = []
+    page_images = {}
     for i, (page_number, image, lines) in enumerate(run_line_extraction_all_pages(pdf_path), start=1):
         page_text_length = sum(len(text) for text, _, _ in lines)
         if page_text_length >= MIN_PAGE_TEXT_LENGTH:
+            page_images[page_number] = image
             for band in find_question_crop_bounds(lines):
                 page_bands.append((page_number, image, band))
         progress.progress(i / total_to_process)
@@ -100,7 +122,7 @@ def run_pipeline(pdf_path):
     progress.empty()
     status.empty()
 
-    attach_question_images(parsed_questions, page_offsets, page_bands)
+    attach_question_images(parsed_questions, page_offsets, page_bands, page_images)
 
     clean_questions = []
     needs_review = []

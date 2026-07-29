@@ -301,6 +301,70 @@ def test_attach_question_images_ignores_bands_on_a_page_with_no_questions():
     assert parsed_questions[0]["question_image"] is not None
 
 
+def test_attach_question_images_retries_mismatched_page_and_accepts_improved_count():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0)]
+    # Default pass only found one band -- a mismatch against 2 questions.
+    page_bands = [(2, image_a, (5, 30))]
+    page_images = {2: image_a}
+    retried_lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. Paris", 100, 120),
+        ("שאלה מס' 2 (5 נק')", 130, 150),
+        ("א. Rome", 200, 220),
+    ]
+
+    with patch("app.extract_line_boxes", return_value=retried_lines) as mock_extract:
+        app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images)
+
+    mock_extract.assert_called_once_with(image_a, config=app.RETRY_LINE_EXTRACTION_CONFIG)
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is not None
+
+
+def test_attach_question_images_rejects_retry_that_finds_fewer_headers():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+        {"question": "Q3", "choices": ["a", "b", "c", "d"], "header_line_index": 20},
+    ]
+    page_offsets = [(2, 0)]
+    # Default pass found 2 bands against 3 questions -- a mismatch.
+    page_bands = [(2, image_a, (5, 30)), (2, image_a, (35, 60))]
+    page_images = {2: image_a}
+    # Retry regresses to only 1 header -- must be rejected, not swapped in.
+    retried_lines = [("שאלה מס' 1 (5 נק')", 0, 20), ("א. Paris", 100, 120)]
+
+    with patch("app.extract_line_boxes", return_value=retried_lines):
+        app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images)
+
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None
+    assert parsed_questions[2]["question_image"] is None
+
+
+def test_attach_question_images_skips_retry_without_a_recorded_page_image():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+
+    with patch("app.extract_line_boxes") as mock_extract:
+        app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    mock_extract.assert_not_called()
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None
+
+
 def test_page_number_for_line_index_returns_first_page_for_index_zero():
     page_offsets = [(2, 0), (4, 6), (5, 10)]
     assert app.page_number_for_line_index(page_offsets, 0) == 2

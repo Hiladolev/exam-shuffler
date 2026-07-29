@@ -1,7 +1,9 @@
 import io
+from unittest.mock import patch
 
 from PIL import Image
 
+import test_ocr
 from test_ocr import _group_words_into_lines, crop_question_image
 
 
@@ -57,3 +59,37 @@ def test_crop_question_image_clamps_padding_to_image_bounds():
     cropped = Image.open(io.BytesIO(png_bytes))
 
     assert cropped.size == (200, 300)
+
+
+def test_extract_line_boxes_forwards_config_to_image_to_data():
+    image = Image.new("RGB", (10, 10), color="white")
+    fake_data = {
+        "text": ["Word"],
+        "left": [0],
+        "top": [0],
+        "width": [10],
+        "height": [10],
+        "block_num": [1],
+        "par_num": [1],
+        "line_num": [1],
+    }
+
+    with patch("test_ocr.pytesseract.image_to_data", return_value=fake_data) as mock_image_to_data:
+        test_ocr.extract_line_boxes(image, config="--psm 12")
+
+    _, kwargs = mock_image_to_data.call_args
+    assert kwargs["config"] == "--psm 12"
+
+
+def test_extract_line_boxes_defaults_to_empty_config():
+    image = Image.new("RGB", (10, 10), color="white")
+    fake_data = {
+        "text": [], "left": [], "top": [], "width": [], "height": [],
+        "block_num": [], "par_num": [], "line_num": [],
+    }
+
+    with patch("test_ocr.pytesseract.image_to_data", return_value=fake_data) as mock_image_to_data:
+        test_ocr.extract_line_boxes(image)
+
+    _, kwargs = mock_image_to_data.call_args
+    assert kwargs["config"] == ""

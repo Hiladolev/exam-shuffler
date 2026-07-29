@@ -73,8 +73,8 @@ def _group_words_into_lines(data):
     return result
 
 
-def extract_line_boxes(image):
-    data = pytesseract.image_to_data(image, lang="heb+eng", output_type=Output.DICT)
+def extract_line_boxes(image, config=""):
+    data = pytesseract.image_to_data(image, lang="heb+eng", config=config, output_type=Output.DICT)
     return _group_words_into_lines(data)
 
 
