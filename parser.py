@@ -62,6 +62,19 @@ def find_choice_line_bounds(lines, header_index):
     return bounds
 
 
+def find_embedded_header_bounds(lines, header_index):
+    bounds = {}
+    choice_count = 0
+    for text, top, bottom in lines[header_index + 1:]:
+        if is_header_line(text):
+            break
+        if CHOICE_PATTERN.match(text):
+            choice_count += 1
+        elif choice_count > 0 and is_probable_embedded_header(text):
+            bounds.setdefault(choice_count, (top, bottom))
+    return bounds
+
+
 def strip_bidi_marks(text):
     return BIDI_MARK_PATTERN.sub("", text)
 

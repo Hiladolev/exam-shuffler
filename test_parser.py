@@ -6,6 +6,7 @@ from parser import (
     find_header_line_indices,
     is_probable_embedded_header,
     find_choice_line_bounds,
+    find_embedded_header_bounds,
 )
 
 
@@ -189,3 +190,44 @@ def test_find_choice_line_bounds_empty_when_no_choices_follow():
         ("dangling prose, no choices", 25, 45),
     ]
     assert find_choice_line_bounds(lines, header_index=0) == []
+
+
+def test_find_embedded_header_bounds_detects_candidate_with_digit():
+    lines = [
+        ("שאלה מס' 18 (5 נק')", 0, 20),
+        ("א. choice one", 25, 45),
+        ("ב. choice two", 50, 70),
+        ("שאלה 'on' 19 (5 בק')", 75, 95),
+        ("א. choice three", 100, 120),
+    ]
+    assert find_embedded_header_bounds(lines, header_index=0) == {2: (75, 95)}
+
+
+def test_find_embedded_header_bounds_ignores_candidate_without_digit():
+    lines = [
+        ("שאלה מס' 18 (5 נק')", 0, 20),
+        ("א. choice one", 25, 45),
+        ("שאלה בלי מספר", 50, 70),
+        ("ב. choice two", 75, 95),
+    ]
+    assert find_embedded_header_bounds(lines, header_index=0) == {}
+
+
+def test_find_embedded_header_bounds_ignores_lines_before_any_choice_started():
+    lines = [
+        ("שאלה מס' 18 (5 נק')", 0, 20),
+        ("שאלה 19 embedded too early", 25, 45),
+        ("א. choice one", 50, 70),
+    ]
+    assert find_embedded_header_bounds(lines, header_index=0) == {}
+
+
+def test_find_embedded_header_bounds_stops_at_next_real_header():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("א. Paris", 25, 45),
+        ("שאלה מס' 6 (3 נק')", 50, 70),
+        ("שאלה 19 mangled but after a different real header", 75, 95),
+        ("א. Red", 100, 120),
+    ]
+    assert find_embedded_header_bounds(lines, header_index=0) == {}
