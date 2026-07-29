@@ -52,6 +52,16 @@ def find_question_crop_bounds(lines):
     return bounds
 
 
+def find_choice_line_bounds(lines, header_index):
+    bounds = []
+    for text, top, bottom in lines[header_index + 1:]:
+        if is_header_line(text):
+            break
+        if CHOICE_PATTERN.match(text):
+            bounds.append((top, bottom))
+    return bounds
+
+
 def strip_bidi_marks(text):
     return BIDI_MARK_PATTERN.sub("", text)
 

@@ -5,6 +5,7 @@ from parser import (
     strip_version_lines,
     find_header_line_indices,
     is_probable_embedded_header,
+    find_choice_line_bounds,
 )
 
 
@@ -155,3 +156,36 @@ def test_is_probable_embedded_header_false_without_the_token():
 
 def test_is_probable_embedded_header_false_without_a_digit():
     assert is_probable_embedded_header("שאלה בלי מספר בכלל") is False
+
+
+def test_find_choice_line_bounds_returns_all_choice_positions_after_header():
+    lines = [
+        ("שאלה מס' 18 (5 נק')", 0, 20),
+        ("question body", 25, 45),
+        ("א. choice one", 50, 70),
+        ("ב. choice two", 75, 95),
+        ("שאלה 'on' 19 (5 בק')", 100, 120),
+        ("more body", 125, 145),
+        ("א. choice three", 150, 170),
+    ]
+    assert find_choice_line_bounds(lines, header_index=0) == [
+        (50, 70), (75, 95), (150, 170),
+    ]
+
+
+def test_find_choice_line_bounds_stops_at_next_real_header():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("א. Paris", 25, 45),
+        ("שאלה מס' 6 (3 נק')", 50, 70),
+        ("א. Red", 75, 95),
+    ]
+    assert find_choice_line_bounds(lines, header_index=0) == [(25, 45)]
+
+
+def test_find_choice_line_bounds_empty_when_no_choices_follow():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("dangling prose, no choices", 25, 45),
+    ]
+    assert find_choice_line_bounds(lines, header_index=0) == []
