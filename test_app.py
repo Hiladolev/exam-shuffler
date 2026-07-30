@@ -436,6 +436,28 @@ def test_attach_question_images_without_page_lines_matches_old_behavior():
     assert "choice_line_bounds" not in parsed_questions[0]
 
 
+def test_attach_split_part_images_crops_using_bounds_and_page_image():
+    page_image = Image.new("RGB", (200, 300), color="white")
+    parts = [
+        {"question": "Q", "choices": ["a", "b"], "question_image": b"EXISTING"},
+        {"question": "", "choices": ["c", "d"], "image_bounds": (50, 100)},
+    ]
+
+    app.attach_split_part_images(parts, page_image)
+
+    assert parts[0]["question_image"] == b"EXISTING"
+    assert parts[1]["question_image"] is not None
+    assert "image_bounds" not in parts[1]
+
+
+def test_attach_split_part_images_leaves_question_image_unset_without_bounds():
+    parts = [{"question": "", "choices": ["c", "d"]}]
+
+    app.attach_split_part_images(parts, Image.new("RGB", (200, 300), color="white"))
+
+    assert parts[0].get("question_image") is None
+
+
 def test_page_number_for_line_index_returns_first_page_for_index_zero():
     page_offsets = [(2, 0), (4, 6), (5, 10)]
     assert app.page_number_for_line_index(page_offsets, 0) == 2

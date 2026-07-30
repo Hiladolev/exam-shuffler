@@ -102,6 +102,13 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
                 question["question_image"] = None
 
 
+def attach_split_part_images(parts, page_image):
+    for part in parts:
+        bounds = part.pop("image_bounds", None)
+        if bounds is not None and page_image is not None:
+            part["question_image"] = crop_question_image(page_image, bounds[0], bounds[1])
+
+
 def run_pipeline(pdf_path):
     total_pages = pdfinfo_from_path(pdf_path, poppler_path=POPPLER_PATH)["Pages"]
     total_to_process = total_pages - 1
@@ -378,9 +385,16 @@ if st.session_state.get("processed"):
                 elif any(not (0 < p < len(q["choices"])) for p in split_points):
                     st.error(f"Split points must be between 1 and {len(q['choices']) - 1}.")
                 else:
-                    st.session_state[split_key] = shuffle_questions(
-                        split_choices(q["question"], q["choices"], split_points)
+                    split_parts = split_choices(
+                        q["question"],
+                        q["choices"],
+                        split_points,
+                        question_image=q.get("question_image"),
+                        choice_line_bounds=q.get("choice_line_bounds"),
+                        embedded_header_bounds=q.get("embedded_header_bounds"),
                     )
+                    attach_split_part_images(split_parts, q.get("page_image"))
+                    st.session_state[split_key] = shuffle_questions(split_parts)
                     st.rerun()
         else:
             split_cards = st.session_state[split_key]
