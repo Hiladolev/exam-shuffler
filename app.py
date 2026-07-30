@@ -125,10 +125,12 @@ def run_pipeline(pdf_path):
     status = st.empty()
     page_bands = []
     page_images = {}
+    page_lines = {}
     for i, (page_number, image, lines) in enumerate(run_line_extraction_all_pages(pdf_path), start=1):
         page_text_length = sum(len(text) for text, _, _ in lines)
         if page_text_length >= MIN_PAGE_TEXT_LENGTH:
             page_images[page_number] = image
+            page_lines[page_number] = lines
             for band in find_question_crop_bounds(lines):
                 page_bands.append((page_number, image, band))
         progress.progress(i / total_to_process)
@@ -136,16 +138,12 @@ def run_pipeline(pdf_path):
     progress.empty()
     status.empty()
 
-    attach_question_images(parsed_questions, page_offsets, page_bands, page_images)
+    attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
 
     clean_questions = []
     needs_review = []
     for q in parsed_questions:
         if len(q["choices"]) == 0 or len(q["choices"]) > 5:
-            # Flagged/needs-review questions always show plain OCR'd text in this
-            # phase (Phase 2 will extend cropping to them) -- clear any image a
-            # header/choice band happened to produce so it can never leak through.
-            q["question_image"] = None
             needs_review.append(q)
         else:
             clean_questions.append(q)
