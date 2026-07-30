@@ -89,9 +89,11 @@ def strip_version_lines(text):
     return "\n".join(result_lines)
 
 
-def parse_ocr_text(text):
+def parse_ocr_text(text, page_offsets=None):
     text = strip_bidi_marks(text)
     lines = text.splitlines()
+
+    page_boundary_starts = {start for _, start in page_offsets[1:]} if page_offsets else set()
 
     header_indices = [i for i, line in enumerate(lines) if is_header_line(line)]
     block_starts = [0] + header_indices
@@ -103,14 +105,17 @@ def parse_ocr_text(text):
     questions = []
     for start, end in block_bounds:
         block_lines = lines[start:end]
+        content_start = start
         if start in header_indices:
             block_lines = block_lines[1:]
+            content_start = start + 1
 
         question_lines = []
         choices = []
         in_choices = False
 
-        for line in block_lines:
+        for offset, line in enumerate(block_lines):
+            absolute_index = content_start + offset
             stripped = line.strip()
             if not stripped:
                 continue
@@ -119,6 +124,8 @@ def parse_ocr_text(text):
             if match:
                 in_choices = True
                 choices.append(match.group(2).strip())
+            elif in_choices and absolute_index in page_boundary_starts:
+                choices.append(stripped)
             elif in_choices:
                 choices[-1] = (choices[-1] + " " + stripped).strip()
             else:

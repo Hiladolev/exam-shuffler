@@ -231,3 +231,61 @@ def test_find_embedded_header_bounds_stops_at_next_real_header():
         ("א. Red", 100, 120),
     ]
     assert find_embedded_header_bounds(lines, header_index=0) == {}
+
+
+def test_parse_ocr_text_starts_new_choice_at_page_boundary_instead_of_gluing():
+    text = "\n".join([
+        "שאלה מס' 1 (2 נק')",
+        "question body",
+        "א. choice one",
+        "ב. choice two",
+        "continuation from next page",
+        "א. choice three",
+    ])
+    page_offsets = [(2, 0), (3, 4)]
+
+    questions = parse_ocr_text(text, page_offsets)
+
+    assert len(questions) == 1
+    assert questions[0]["choices"] == [
+        "choice one",
+        "choice two",
+        "continuation from next page",
+        "choice three",
+    ]
+
+
+def test_parse_ocr_text_without_page_offsets_keeps_gluing_across_pages():
+    text = "\n".join([
+        "שאלה מס' 1 (2 נק')",
+        "question body",
+        "א. choice one",
+        "ב. choice two",
+        "continuation from next page",
+        "א. choice three",
+    ])
+
+    questions = parse_ocr_text(text)
+
+    assert len(questions) == 1
+    assert questions[0]["choices"] == [
+        "choice one",
+        "choice two continuation from next page",
+        "choice three",
+    ]
+
+
+def test_parse_ocr_text_boundary_inside_question_intro_prose_is_inert():
+    text = "\n".join([
+        "שאלה מס' 1 (2 נק')",
+        "question line one",
+        "question line two",
+        "א. choice one",
+    ])
+    page_offsets = [(2, 0), (3, 2)]
+
+    questions = parse_ocr_text(text, page_offsets)
+
+    assert len(questions) == 1
+    assert questions[0]["question"] == "question line one question line two"
+    assert questions[0]["choices"] == ["choice one"]
