@@ -30,12 +30,17 @@ RETRY_LINE_EXTRACTION_CONFIG = "--psm 12"
 
 def build_page_offsets(kept_pages):
     page_offsets = []
-    next_line_index = 0
+    accumulated_text = ""
     for page_number, stripped_text in kept_pages:
-        if page_offsets:
-            next_line_index += 2
-        page_offsets.append((page_number, next_line_index))
-        next_line_index += stripped_text.count("\n")
+        page_start = len(accumulated_text.splitlines())
+        accumulated_text = (
+            accumulated_text + "\n\n" + stripped_text if accumulated_text else stripped_text
+        )
+        page_lines = accumulated_text.splitlines()
+        real_start = page_start
+        while real_start < len(page_lines) and not page_lines[real_start].strip():
+            real_start += 1
+        page_offsets.append((page_number, real_start))
     return page_offsets
 
 

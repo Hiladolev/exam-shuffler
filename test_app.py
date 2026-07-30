@@ -526,3 +526,24 @@ def test_build_page_offsets_handles_single_line_pages():
 def test_build_page_offsets_handles_a_page_that_stripped_to_empty():
     kept_pages = [(2, "l1\nl2"), (3, ""), (4, "m1\nm2")]
     assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 3), (4, 5)]
+
+
+def test_build_page_offsets_multiple_trailing_blank_lines_do_not_cause_drift():
+    # Matches the real sample exam: every page's OCR'd text ends with
+    # several trailing blank lines (not just one), yet this alone never
+    # causes drift as long as the next page's own text starts with real
+    # content -- confirmed against the real document during investigation.
+    kept_pages = [(2, "a\nb\n\n\n"), (3, "c\nd")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 6)]
+
+
+def test_build_page_offsets_skips_leading_blank_line_within_a_page():
+    # Reproduces the real bug: a page's own stripped text can start with
+    # a blank line (e.g. a version-number line at the very top gets
+    # dropped entirely by strip_version_lines, revealing a pre-existing
+    # blank line as the new first line). The recorded start must land on
+    # the first real content line, not the blank one -- otherwise
+    # parse_ocr_text's page-boundary check (which only ever sees non-blank
+    # lines, since blanks are skipped via `continue` first) never fires.
+    kept_pages = [(2, "a\nb"), (3, "\nc\nd")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 4)]
