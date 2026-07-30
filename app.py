@@ -126,7 +126,7 @@ def run_pipeline(pdf_path):
 
     page_offsets = build_page_offsets(kept_pages)
     raw_text = "\n\n".join(text for _, text in kept_pages)
-    parsed_questions = parse_ocr_text(raw_text)
+    parsed_questions = parse_ocr_text(raw_text, page_offsets)
 
     progress = st.progress(0)
     status = st.empty()
