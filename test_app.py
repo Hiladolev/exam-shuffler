@@ -222,6 +222,24 @@ def test_build_final_html_renders_review_cards_as_plain_text():
     assert "Correct answer index: 2" in result
 
 
+def test_build_final_html_renders_review_card_image_when_present():
+    edited_review_cards = [
+        {
+            "question": "ignored text",
+            "choices": ["a", "b", "c", "d"],
+            "correct_index": 1,
+            "question_image": b"FAKEPNGBYTES",
+        },
+    ]
+    result = app.build_final_html([], edited_review_cards)
+
+    expected_b64 = base64.b64encode(b"FAKEPNGBYTES").decode("ascii")
+    assert f'<img src="data:image/png;base64,{expected_b64}">' in result
+    assert "ignored text" not in result
+    assert "<li>0: a</li>" in result
+    assert "Correct answer index: 1" in result
+
+
 def test_attach_question_images_matched_page_keeps_image_when_another_page_mismatches():
     image_a = Image.new("RGB", (100, 50), color="white")
     image_b = Image.new("RGB", (100, 50), color="white")

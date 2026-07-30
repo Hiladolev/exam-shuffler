@@ -198,11 +198,13 @@ def _render_question_html(q, index):
 
 
 def _render_review_card_html(q, index):
-    lines = [
-        f"<h3>Flagged Question {index}</h3>",
-        f"<p>{html.escape(q['question'])}</p>",
-        "<ul>",
-    ]
+    lines = [f"<h3>Flagged Question {index}</h3>"]
+    if q.get("question_image"):
+        b64 = base64.b64encode(q["question_image"]).decode("ascii")
+        lines.append(f'<img src="data:image/png;base64,{b64}">')
+    else:
+        lines.append(f"<p>{html.escape(q['question'])}</p>")
+    lines.append("<ul>")
     for j, choice in enumerate(q["choices"]):
         lines.append(f"<li>{j}: {html.escape(choice)}</li>")
     lines.append("</ul>")
