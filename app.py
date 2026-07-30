@@ -354,7 +354,11 @@ if st.session_state.get("processed"):
 
         if split_key not in st.session_state:
             st.subheader(f"Flagged Question {i + 1}")
-            st.write(q["question"])
+            question_image = q.get("question_image")
+            if question_image:
+                st.image(question_image)
+            else:
+                st.write(q["question"])
             for k, choice in enumerate(q["choices"]):
                 st.write(f"{k}: {choice}")
 
