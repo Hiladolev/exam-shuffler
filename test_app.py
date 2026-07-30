@@ -365,6 +365,77 @@ def test_attach_question_images_skips_retry_without_a_recorded_page_image():
     assert parsed_questions[1]["question_image"] is None
 
 
+def test_attach_question_images_attaches_choice_and_embedded_header_bounds():
+    image_a = Image.new("RGB", (100, 300), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e", "f"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (20, 50))]
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("שאלה 'on' 2 (5 בק')", 100, 120),
+        ("ג. c", 130, 150),
+        ("ד. d", 155, 175),
+        ("ה. e", 180, 200),
+        ("א. f", 205, 225),
+    ]
+    page_lines = {2: lines}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_lines=page_lines)
+
+    q = parsed_questions[0]
+    assert q["question_image"] is not None
+    assert q["choice_line_bounds"] == [
+        (50, 70), (75, 95), (130, 150), (155, 175), (180, 200), (205, 225),
+    ]
+    assert q["embedded_header_bounds"] == {2: (100, 120)}
+    assert q["page_image"] is image_a
+
+
+def test_attach_question_images_uses_retried_lines_for_bounds_when_retry_accepted():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    page_images = {2: image_a}
+    stale_default_lines = [("stale data that must not be used", 0, 5)]
+    retried_lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. Paris", 100, 120),
+        ("שאלה מס' 2 (5 נק')", 130, 150),
+        ("א. Rome", 200, 220),
+    ]
+
+    with patch("app.extract_line_boxes", return_value=retried_lines):
+        app.attach_question_images(
+            parsed_questions, page_offsets, page_bands, page_images,
+            page_lines={2: stale_default_lines},
+        )
+
+    assert parsed_questions[0]["choice_line_bounds"] == [(100, 120)]
+    assert parsed_questions[1]["choice_line_bounds"] == [(200, 220)]
+
+
+def test_attach_question_images_without_page_lines_matches_old_behavior():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 8))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert "choice_line_bounds" not in parsed_questions[0]
+
+
 def test_page_number_for_line_index_returns_first_page_for_index_zero():
     page_offsets = [(2, 0), (4, 6), (5, 10)]
     assert app.page_number_for_line_index(page_offsets, 0) == 2

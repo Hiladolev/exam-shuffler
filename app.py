@@ -17,6 +17,9 @@ from parser import (
     parse_ocr_text,
     find_split_suggestions,
     find_question_crop_bounds,
+    find_header_line_indices,
+    find_choice_line_bounds,
+    find_embedded_header_bounds,
 )
 from shuffler_core import shuffle_questions, split_choices, remove_choice
 
@@ -45,8 +48,9 @@ def page_number_for_line_index(page_offsets, line_index):
     return result_page_number
 
 
-def attach_question_images(parsed_questions, page_offsets, page_bands, page_images=None):
+def attach_question_images(parsed_questions, page_offsets, page_bands, page_images=None, page_lines=None):
     page_images = page_images or {}
+    page_lines = page_lines or {}
 
     questions_by_page = {}
     for question in parsed_questions:
@@ -59,6 +63,7 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
 
     for page_number, page_questions in questions_by_page.items():
         bands = bands_by_page.get(page_number, [])
+        active_lines = page_lines.get(page_number)
 
         # A count mismatch on the default pass may just mean Tesseract's
         # default page segmentation dropped a header line entirely (seen in
@@ -67,22 +72,31 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
         # segmentation mode, but only ever trust the retry if it finds at
         # least as many headers as the default pass did -- otherwise keep
         # the default result and fall through to the same safe None
-        # fallback as before.
+        # fallback as before. If the retry IS accepted, its lines (not the
+        # default pass's) become "active_lines" -- the retried bands live in
+        # that pass's own pixel/segmentation space, not the default one's.
         if len(bands) != len(page_questions) and page_number in page_images:
             image = page_images[page_number]
             retried_lines = extract_line_boxes(image, config=RETRY_LINE_EXTRACTION_CONFIG)
             retried_bounds = find_question_crop_bounds(retried_lines)
             if len(retried_bounds) >= len(bands):
                 bands = [(image, band) for band in retried_bounds]
+                active_lines = retried_lines
 
         # Only attach images if this page's band count exactly matches its
         # question count -- otherwise we can't be sure a given band lines up
         # with the right question, so this page's questions fall back to None.
         if len(bands) == len(page_questions):
-            for question, (image, band) in zip(page_questions, bands):
+            header_indices = find_header_line_indices(active_lines) if active_lines else []
+            for idx, (question, (image, band)) in enumerate(zip(page_questions, bands)):
                 question["question_image"] = (
                     crop_question_image(image, band[0], band[1]) if band is not None else None
                 )
+                if active_lines and idx < len(header_indices):
+                    header_index = header_indices[idx]
+                    question["choice_line_bounds"] = find_choice_line_bounds(active_lines, header_index)
+                    question["embedded_header_bounds"] = find_embedded_header_bounds(active_lines, header_index)
+                    question["page_image"] = image
         else:
             for question in page_questions:
                 question["question_image"] = None
