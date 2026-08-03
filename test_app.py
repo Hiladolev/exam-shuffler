@@ -383,7 +383,7 @@ def test_attach_question_images_skips_retry_without_a_recorded_page_image():
     assert parsed_questions[1]["question_image"] is None
 
 
-def test_attach_question_images_attaches_choice_and_embedded_header_bounds():
+def test_attach_question_images_attaches_choice_bounds_stopping_at_loose_header():
     image_a = Image.new("RGB", (100, 300), color="white")
     parsed_questions = [
         {"question": "Q1", "choices": ["a", "b", "c", "d", "e", "f"], "header_line_index": 0},
@@ -406,10 +406,11 @@ def test_attach_question_images_attaches_choice_and_embedded_header_bounds():
 
     q = parsed_questions[0]
     assert q["question_image"] is not None
-    assert q["choice_line_bounds"] == [
-        (50, 70), (75, 95), (130, 150), (155, 175), (180, 200), (205, 225),
-    ]
-    assert q["embedded_header_bounds"] == {2: (100, 120)}
+    # The loose header at index 3 is now a real boundary (Task 3) -- it stops
+    # the scan instead of being glued in as an embedded candidate, so only the
+    # two choices before it belong to this question's bounds.
+    assert q["choice_line_bounds"] == [(50, 70), (75, 95)]
+    assert q["embedded_header_bounds"] == {}
     assert q["page_image"] is image_a
 
 

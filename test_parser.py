@@ -94,6 +94,18 @@ def test_find_question_crop_bounds_consecutive_headers_with_no_choice_between():
     assert find_question_crop_bounds(lines) == [None, (45, 75)]
 
 
+def test_find_question_crop_bounds_recognizes_loose_header_as_anchor():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("question one text", 25, 45),
+        ("א. Paris", 50, 70),
+        ("שאלה 'on' 6 (3 בק')", 75, 95),
+        ("question two text", 100, 120),
+        ("א. Red", 125, 145),
+    ]
+    assert find_question_crop_bounds(lines) == [(20, 50), (95, 125)]
+
+
 def test_parse_ocr_text_records_header_line_index_including_leading_block():
     text = "\n".join([
         "some leading noise",
@@ -154,6 +166,16 @@ def test_find_header_line_indices_empty_when_no_headers():
     assert find_header_line_indices(lines) == []
 
 
+def test_find_header_line_indices_recognizes_loose_header():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("א. Paris", 25, 45),
+        ("שאלה 'on' 6 (3 בק')", 50, 70),
+        ("א. Red", 75, 95),
+    ]
+    assert find_header_line_indices(lines) == [0, 2]
+
+
 def test_is_probable_embedded_header_true_when_token_and_digit_present():
     assert is_probable_embedded_header("שאלה 'on' 19 (5 בק')") is True
 
@@ -166,7 +188,7 @@ def test_is_probable_embedded_header_false_without_a_digit():
     assert is_probable_embedded_header("שאלה בלי מספר בכלל") is False
 
 
-def test_find_choice_line_bounds_returns_all_choice_positions_after_header():
+def test_find_choice_line_bounds_stops_at_loose_header_after_collecting_prior_choices():
     lines = [
         ("שאלה מס' 18 (5 נק')", 0, 20),
         ("question body", 25, 45),
@@ -176,8 +198,10 @@ def test_find_choice_line_bounds_returns_all_choice_positions_after_header():
         ("more body", 125, 145),
         ("א. choice three", 150, 170),
     ]
+    # Loose header at index 4 now stops the scan (Task 3) -- "choice three"
+    # belongs to the next auto-split question, not this one.
     assert find_choice_line_bounds(lines, header_index=0) == [
-        (50, 70), (75, 95), (150, 170),
+        (50, 70), (75, 95),
     ]
 
 
@@ -199,7 +223,17 @@ def test_find_choice_line_bounds_empty_when_no_choices_follow():
     assert find_choice_line_bounds(lines, header_index=0) == []
 
 
-def test_find_embedded_header_bounds_detects_candidate_with_digit():
+def test_find_choice_line_bounds_stops_at_loose_header():
+    lines = [
+        ("שאלה מס' 5 (2 נק')", 0, 20),
+        ("א. Paris", 25, 45),
+        ("שאלה 'on' 6 (3 בק')", 50, 70),
+        ("א. Red", 75, 95),
+    ]
+    assert find_choice_line_bounds(lines, header_index=0) == [(25, 45)]
+
+
+def test_find_embedded_header_bounds_stops_at_loose_header_with_digit_after_multiple_choices():
     lines = [
         ("שאלה מס' 18 (5 נק')", 0, 20),
         ("א. choice one", 25, 45),
@@ -207,7 +241,9 @@ def test_find_embedded_header_bounds_detects_candidate_with_digit():
         ("שאלה 'on' 19 (5 בק')", 75, 95),
         ("א. choice three", 100, 120),
     ]
-    assert find_embedded_header_bounds(lines, header_index=0) == {2: (75, 95)}
+    # Loose header at index 3 now stops the scan and is never cataloged as an
+    # embedded candidate (Task 3) -- it's a real auto-split boundary now.
+    assert find_embedded_header_bounds(lines, header_index=0) == {}
 
 
 def test_find_embedded_header_bounds_ignores_candidate_without_digit():
@@ -236,6 +272,16 @@ def test_find_embedded_header_bounds_stops_at_next_real_header():
         ("שאלה מס' 6 (3 נק')", 50, 70),
         ("שאלה 19 mangled but after a different real header", 75, 95),
         ("א. Red", 100, 120),
+    ]
+    assert find_embedded_header_bounds(lines, header_index=0) == {}
+
+
+def test_find_embedded_header_bounds_stops_at_loose_header_not_catalog_it():
+    lines = [
+        ("שאלה מס' 18 (5 נק')", 0, 20),
+        ("א. choice one", 25, 45),
+        ("שאלה 'on' 19 (5 בק')", 50, 70),
+        ("א. choice from next question", 75, 95),
     ]
     assert find_embedded_header_bounds(lines, header_index=0) == {}
 

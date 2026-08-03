@@ -55,7 +55,7 @@ def find_letter_reset_indices(lines, header_boundary_indices):
 
 
 def find_header_line_indices(lines):
-    return [i for i, (text, _, _) in enumerate(lines) if is_header_line(text)]
+    return [i for i, (text, _, _) in enumerate(lines) if is_any_header_line(text)]
 
 
 def find_split_suggestions(choices):
@@ -69,12 +69,12 @@ def find_split_suggestions(choices):
 def find_question_crop_bounds(lines):
     bounds = []
     for i, (text, _, header_bottom) in enumerate(lines):
-        if not is_header_line(text):
+        if not is_any_header_line(text):
             continue
 
         band = None
         for choice_text, choice_top, _ in lines[i + 1:]:
-            if is_header_line(choice_text):
+            if is_any_header_line(choice_text):
                 break
             if CHOICE_PATTERN.match(choice_text):
                 if choice_top - header_bottom >= MIN_CROP_BAND_HEIGHT:
@@ -88,7 +88,7 @@ def find_question_crop_bounds(lines):
 def find_choice_line_bounds(lines, header_index):
     bounds = []
     for text, top, bottom in lines[header_index + 1:]:
-        if is_header_line(text):
+        if is_any_header_line(text):
             break
         if CHOICE_PATTERN.match(text):
             bounds.append((top, bottom))
@@ -99,7 +99,7 @@ def find_embedded_header_bounds(lines, header_index):
     bounds = {}
     choice_count = 0
     for text, top, bottom in lines[header_index + 1:]:
-        if is_header_line(text):
+        if is_any_header_line(text):
             break
         if CHOICE_PATTERN.match(text):
             choice_count += 1
