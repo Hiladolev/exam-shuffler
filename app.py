@@ -20,6 +20,8 @@ from parser import (
     find_header_line_indices,
     find_choice_line_bounds,
     find_embedded_header_bounds,
+    determine_expected_choice_count,
+    is_choice_count_suspicious,
 )
 from shuffler_core import shuffle_questions, split_choices, remove_choice
 
@@ -114,6 +116,18 @@ def attach_split_part_images(parts, page_image):
             part["question_image"] = crop_question_image(page_image, bounds[0], bounds[1])
 
 
+def classify_questions(parsed_questions):
+    expected_count = determine_expected_choice_count(parsed_questions)
+    clean_questions = []
+    needs_review = []
+    for q in parsed_questions:
+        if is_choice_count_suspicious(len(q["choices"]), expected_count):
+            needs_review.append(q)
+        else:
+            clean_questions.append(q)
+    return clean_questions, needs_review
+
+
 def run_pipeline(pdf_path):
     total_pages = pdfinfo_from_path(pdf_path, poppler_path=POPPLER_PATH)["Pages"]
     total_to_process = total_pages - 1
@@ -152,14 +166,7 @@ def run_pipeline(pdf_path):
 
     attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
 
-    clean_questions = []
-    needs_review = []
-    for q in parsed_questions:
-        if len(q["choices"]) == 0 or len(q["choices"]) > 5:
-            needs_review.append(q)
-        else:
-            clean_questions.append(q)
-
+    clean_questions, needs_review = classify_questions(parsed_questions)
     shuffled_questions = shuffle_questions(clean_questions)
     return shuffled_questions, needs_review
 

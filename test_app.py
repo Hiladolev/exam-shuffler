@@ -547,3 +547,14 @@ def test_build_page_offsets_skips_leading_blank_line_within_a_page():
     # lines, since blanks are skipped via `continue` first) never fires.
     kept_pages = [(2, "a\nb"), (3, "\nc\nd")]
     assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 4)]
+
+
+def test_classify_questions_flags_count_that_does_not_match_exam_expected_count():
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a"] * 4},
+        {"question": "Q2", "choices": ["a"] * 4},
+        {"question": "Q3", "choices": ["a"] * 3},
+    ]
+    clean, needs_review = app.classify_questions(parsed_questions)
+    assert [q["question"] for q in clean] == ["Q1", "Q2"]
+    assert [q["question"] for q in needs_review] == ["Q3"]

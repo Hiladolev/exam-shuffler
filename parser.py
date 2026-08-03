@@ -1,4 +1,5 @@
 import re
+from collections import Counter
 
 from shuffler_core import shuffle_questions
 
@@ -13,6 +14,8 @@ EMBEDDED_HEADER_TOKEN = "שאלה"
 DIGIT_PATTERN = re.compile(r"\d")
 CHOICE_LETTER_ORDER = "אבגדה"
 CHOICE_LETTER_RANK = {letter: rank for rank, letter in enumerate(CHOICE_LETTER_ORDER)}
+MIN_EXPECTED_COUNT_SAMPLES = 2
+FALLBACK_ACCEPTABLE_COUNTS = {4, 5}
 
 
 def is_header_line(line):
@@ -176,6 +179,25 @@ def parse_ocr_text(text, page_offsets=None):
             })
 
     return questions
+
+
+def determine_expected_choice_count(questions):
+    counts = [len(q["choices"]) for q in questions if len(q["choices"]) > 0]
+    if not counts:
+        return None
+    tally = Counter(counts).most_common()
+    top_count, top_freq = tally[0]
+    if top_freq < MIN_EXPECTED_COUNT_SAMPLES:
+        return None
+    if len(tally) > 1 and tally[1][1] == top_freq:
+        return None
+    return top_count
+
+
+def is_choice_count_suspicious(choice_count, expected_count):
+    if expected_count is None:
+        return choice_count not in FALLBACK_ACCEPTABLE_COUNTS
+    return choice_count != expected_count
 
 
 if __name__ == "__main__":

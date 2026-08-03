@@ -10,6 +10,8 @@ from parser import (
     is_any_header_line,
     choice_letter_rank,
     find_letter_reset_indices,
+    determine_expected_choice_count,
+    is_choice_count_suspicious,
 )
 
 
@@ -380,3 +382,35 @@ def test_parse_ocr_text_tags_loose_header_questions_true():
     questions = parse_ocr_text(text)
     assert len(questions) == 2
     assert questions[1]["has_real_header"] is True
+
+
+def test_determine_expected_choice_count_clear_majority():
+    questions = [{"choices": ["a"] * 4}] * 5 + [{"choices": ["a"] * 3}]
+    assert determine_expected_choice_count(questions) == 4
+
+
+def test_determine_expected_choice_count_excludes_zero_choice_questions():
+    questions = [{"choices": ["a"] * 4}] * 2 + [{"choices": []}] * 5
+    assert determine_expected_choice_count(questions) == 4
+
+
+def test_determine_expected_choice_count_none_on_tie():
+    questions = [{"choices": ["a"] * 4}] * 2 + [{"choices": ["a"] * 5}] * 2
+    assert determine_expected_choice_count(questions) is None
+
+
+def test_determine_expected_choice_count_none_when_top_count_too_rare():
+    questions = [{"choices": ["a"] * 4}]
+    assert determine_expected_choice_count(questions) is None
+
+
+def test_is_choice_count_suspicious_matches_expected_count():
+    assert is_choice_count_suspicious(4, expected_count=4) is False
+    assert is_choice_count_suspicious(5, expected_count=4) is True
+
+
+def test_is_choice_count_suspicious_falls_back_to_four_or_five_when_no_expected_count():
+    assert is_choice_count_suspicious(4, expected_count=None) is False
+    assert is_choice_count_suspicious(5, expected_count=None) is False
+    assert is_choice_count_suspicious(3, expected_count=None) is True
+    assert is_choice_count_suspicious(0, expected_count=None) is True
