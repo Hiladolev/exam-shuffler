@@ -11,6 +11,8 @@ BIDI_MARK_PATTERN = re.compile(r"[‎‏‪-‮⁦-⁩]")
 MIN_CROP_BAND_HEIGHT = 10
 EMBEDDED_HEADER_TOKEN = "שאלה"
 DIGIT_PATTERN = re.compile(r"\d")
+CHOICE_LETTER_ORDER = "אבגדה"
+CHOICE_LETTER_RANK = {letter: rank for rank, letter in enumerate(CHOICE_LETTER_ORDER)}
 
 
 def is_header_line(line):
@@ -19,6 +21,34 @@ def is_header_line(line):
 
 def is_probable_embedded_header(line):
     return EMBEDDED_HEADER_TOKEN in line and bool(DIGIT_PATTERN.search(line))
+
+
+def is_any_header_line(line):
+    return is_header_line(line) or is_probable_embedded_header(line)
+
+
+def choice_letter_rank(line):
+    match = CHOICE_PATTERN.match(line)
+    if not match:
+        return None
+    return CHOICE_LETTER_RANK[match.group(1)]
+
+
+def find_letter_reset_indices(lines, header_boundary_indices):
+    header_boundary_set = set(header_boundary_indices)
+    indices = []
+    max_rank_seen = -1
+    for i, line in enumerate(lines):
+        if i in header_boundary_set:
+            max_rank_seen = -1
+            continue
+        rank = choice_letter_rank(line)
+        if rank is None:
+            continue
+        if rank <= max_rank_seen:
+            indices.append(i)
+        max_rank_seen = rank
+    return indices
 
 
 def find_header_line_indices(lines):
@@ -95,8 +125,12 @@ def parse_ocr_text(text, page_offsets=None):
 
     page_boundary_starts = {start for _, start in page_offsets[1:]} if page_offsets else set()
 
-    header_indices = [i for i, line in enumerate(lines) if is_header_line(line)]
-    block_starts = [0] + header_indices
+    header_indices = [i for i, line in enumerate(lines) if is_any_header_line(line)]
+    header_index_set = set(header_indices)
+    letter_reset_indices = find_letter_reset_indices(lines, header_indices)
+    all_boundaries = sorted(header_index_set | set(letter_reset_indices))
+
+    block_starts = [0] + all_boundaries
     block_bounds = [
         (start, block_starts[idx + 1] if idx + 1 < len(block_starts) else len(lines))
         for idx, start in enumerate(block_starts)
@@ -106,7 +140,8 @@ def parse_ocr_text(text, page_offsets=None):
     for start, end in block_bounds:
         block_lines = lines[start:end]
         content_start = start
-        if start in header_indices:
+        has_real_header = start in header_index_set
+        if has_real_header:
             block_lines = block_lines[1:]
             content_start = start + 1
 
@@ -137,6 +172,7 @@ def parse_ocr_text(text, page_offsets=None):
                 "question": question_text,
                 "choices": choices,
                 "header_line_index": start,
+                "has_real_header": has_real_header,
             })
 
     return questions

@@ -7,6 +7,9 @@ from parser import (
     is_probable_embedded_header,
     find_choice_line_bounds,
     find_embedded_header_bounds,
+    is_any_header_line,
+    choice_letter_rank,
+    find_letter_reset_indices,
 )
 
 
@@ -240,7 +243,7 @@ def test_parse_ocr_text_starts_new_choice_at_page_boundary_instead_of_gluing():
         "א. choice one",
         "ב. choice two",
         "continuation from next page",
-        "א. choice three",
+        "ג. choice three",
     ])
     page_offsets = [(2, 0), (3, 4)]
 
@@ -262,7 +265,7 @@ def test_parse_ocr_text_without_page_offsets_keeps_gluing_across_pages():
         "א. choice one",
         "ב. choice two",
         "continuation from next page",
-        "א. choice three",
+        "ג. choice three",
     ])
 
     questions = parse_ocr_text(text)
@@ -289,3 +292,89 @@ def test_parse_ocr_text_boundary_inside_question_intro_prose_is_inert():
     assert len(questions) == 1
     assert questions[0]["question"] == "question line one question line two"
     assert questions[0]["choices"] == ["choice one"]
+
+
+def test_is_any_header_line_true_for_strict_header():
+    assert is_any_header_line("שאלה מס' 5 (2 נק')") is True
+
+
+def test_is_any_header_line_true_for_loose_header():
+    assert is_any_header_line("שאלה 'on' 19 (5 בק')") is True
+
+
+def test_is_any_header_line_false_for_ordinary_text():
+    assert is_any_header_line("just a regular sentence") is False
+
+
+def test_choice_letter_rank_returns_rank_for_choice_line():
+    assert choice_letter_rank("א. Paris") == 0
+    assert choice_letter_rank("ה. Berlin") == 4
+
+
+def test_choice_letter_rank_none_for_non_choice_line():
+    assert choice_letter_rank("some prose") is None
+
+
+def test_find_letter_reset_indices_detects_terminal_heh_followed_by_reset():
+    lines = [
+        "question body",
+        "א. one",
+        "ב. two",
+        "ג. three",
+        "ד. four",
+        "ה. five",
+        "א. next question first choice",
+    ]
+    assert find_letter_reset_indices(lines, header_boundary_indices=[]) == [6]
+
+
+def test_find_letter_reset_indices_ignores_forward_gap():
+    lines = ["א. one", "ג. skipped bet, not a reset"]
+    assert find_letter_reset_indices(lines, header_boundary_indices=[]) == []
+
+
+def test_find_letter_reset_indices_resets_tracking_at_a_header_boundary():
+    lines = [
+        "א. one",
+        "ב. two",
+        "שאלה מס' 2 (2 נק')",
+        "א. real next question, not a reset",
+    ]
+    assert find_letter_reset_indices(lines, header_boundary_indices=[2]) == []
+
+
+def test_parse_ocr_text_splits_on_letter_reset_with_no_header_signal():
+    text = "\n".join([
+        "שאלה מס' 1 (2 נק')",
+        "question one body",
+        "א. one",
+        "ב. two",
+        "ג. three",
+        "ד. four",
+        "ה. five",
+        "א. next question first choice",
+        "ב. next question second choice",
+    ])
+    questions = parse_ocr_text(text)
+
+    assert len(questions) == 2
+    assert questions[0]["choices"] == ["one", "two", "three", "four", "five"]
+    assert questions[1]["choices"] == ["next question first choice", "next question second choice"]
+    assert questions[1]["header_line_index"] == 7
+    assert questions[1]["has_real_header"] is False
+
+
+def test_parse_ocr_text_tags_real_header_questions_true():
+    text = "\n".join(["שאלה מס' 1 (2 נק')", "body", "א. one"])
+    questions = parse_ocr_text(text)
+    assert questions[0]["has_real_header"] is True
+
+
+def test_parse_ocr_text_tags_loose_header_questions_true():
+    text = "\n".join([
+        "שאלה מס' 1 (2 נק')", "body one", "א. a",
+        "שאלה 'on' 2 (5 בק')", "body two", "א. b",
+    ])
+    questions = parse_ocr_text(text)
+    assert len(questions) == 2
+    assert questions[1]["has_real_header"] is True
