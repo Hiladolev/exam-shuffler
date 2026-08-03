@@ -72,6 +72,11 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
         bands = bands_by_page.get(page_number, [])
         active_lines = page_lines.get(page_number)
 
+        header_based_questions = [q for q in page_questions if q.get("has_real_header", True)]
+        for question in page_questions:
+            if not question.get("has_real_header", True):
+                question["question_image"] = None
+
         # A count mismatch on the default pass may just mean Tesseract's
         # default page segmentation dropped a header line entirely (seen in
         # practice: a clean, non-overlapping header line missing from both
@@ -82,7 +87,7 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
         # fallback as before. If the retry IS accepted, its lines (not the
         # default pass's) become "active_lines" -- the retried bands live in
         # that pass's own pixel/segmentation space, not the default one's.
-        if len(bands) != len(page_questions) and page_number in page_images:
+        if len(bands) != len(header_based_questions) and page_number in page_images:
             image = page_images[page_number]
             retried_lines = extract_line_boxes(image, config=RETRY_LINE_EXTRACTION_CONFIG)
             retried_bounds = find_question_crop_bounds(retried_lines)
@@ -90,12 +95,13 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
                 bands = [(image, band) for band in retried_bounds]
                 active_lines = retried_lines
 
-        # Only attach images if this page's band count exactly matches its
-        # question count -- otherwise we can't be sure a given band lines up
-        # with the right question, so this page's questions fall back to None.
-        if len(bands) == len(page_questions):
+        # Questions with no real header (letter-reset or leading-block splits)
+        # are excluded above -- they structurally never have a crop band, so
+        # they must never count against this page's match check. Only
+        # header-based questions are compared against bands here.
+        if len(bands) == len(header_based_questions):
             header_indices = find_header_line_indices(active_lines) if active_lines else []
-            for idx, (question, (image, band)) in enumerate(zip(page_questions, bands)):
+            for idx, (question, (image, band)) in enumerate(zip(header_based_questions, bands)):
                 question["question_image"] = (
                     crop_question_image(image, band[0], band[1]) if band is not None else None
                 )
@@ -105,7 +111,7 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
                     question["embedded_header_bounds"] = find_embedded_header_bounds(active_lines, header_index)
                     question["page_image"] = image
         else:
-            for question in page_questions:
+            for question in header_based_questions:
                 question["question_image"] = None
 
 

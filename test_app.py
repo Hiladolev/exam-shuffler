@@ -455,6 +455,36 @@ def test_attach_question_images_without_page_lines_matches_old_behavior():
     assert "choice_line_bounds" not in parsed_questions[0]
 
 
+def test_attach_question_images_letter_reset_question_gets_none_without_affecting_siblings():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0, "has_real_header": True},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    # Only one band exists -- for Q1, the only has_real_header question. Q2 has
+    # no real header so it must never be compared against band count at all.
+    page_bands = [(2, image_a, (5, 30))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_defaults_has_real_header_true_when_key_absent():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 8))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+
+
 def test_attach_split_part_images_crops_using_bounds_and_page_image():
     page_image = Image.new("RGB", (200, 300), color="white")
     parts = [
