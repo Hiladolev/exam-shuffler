@@ -35,8 +35,6 @@ from parser import (
     is_any_header_line,
     choice_letter_rank,
     find_letter_reset_indices,
-    determine_expected_choice_count,
-    is_choice_count_suspicious,
 )
 
 

@@ -105,6 +105,8 @@ def test_parse_ocr_text_records_header_line_index_including_leading_block():
     assert len(questions) == 2
     assert questions[0]["header_line_index"] == 0
     assert questions[1]["header_line_index"] == 1
+    assert questions[0]["has_real_header"] is False
+    assert questions[1]["has_real_header"] is True
 
 
 def test_parse_ocr_text_records_header_line_index_for_multiple_questions():
