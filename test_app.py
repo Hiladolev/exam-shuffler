@@ -472,6 +472,23 @@ def test_attach_question_images_letter_reset_question_gets_none_without_affectin
     assert parsed_questions[1]["question_image"] is None
 
 
+def test_attach_question_images_leading_block_without_header_still_gets_image():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    # Q1's header was dropped by OCR on the text side (has_real_header=False),
+    # but it's the leading block (header_line_index == 0), not a genuine
+    # letter-reset split -- the pixel side can still have a real band for it,
+    # so it must stay eligible for band matching instead of being forced to None.
+    page_bands = [(2, image_a, (5, 30))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+
+
 def test_attach_question_images_defaults_has_real_header_true_when_key_absent():
     image_a = Image.new("RGB", (100, 50), color="white")
     parsed_questions = [

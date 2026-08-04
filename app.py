@@ -72,9 +72,17 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
         bands = bands_by_page.get(page_number, [])
         active_lines = page_lines.get(page_number)
 
-        header_based_questions = [q for q in page_questions if q.get("has_real_header", True)]
+        def is_band_eligible(question):
+            # A question with no real header is normally a letter-reset split,
+            # which structurally never has a band. The one exception is the
+            # leading block (header_line_index == 0): its header can be
+            # dropped by OCR on the text side while still existing as a real
+            # band on the independent pixel side, so it stays eligible.
+            return question.get("has_real_header", True) or question["header_line_index"] == 0
+
+        header_based_questions = [q for q in page_questions if is_band_eligible(q)]
         for question in page_questions:
-            if not question.get("has_real_header", True):
+            if not is_band_eligible(question):
                 question["question_image"] = None
 
         # A count mismatch on the default pass may just mean Tesseract's
@@ -95,10 +103,10 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
                 bands = [(image, band) for band in retried_bounds]
                 active_lines = retried_lines
 
-        # Questions with no real header (letter-reset or leading-block splits)
-        # are excluded above -- they structurally never have a crop band, so
-        # they must never count against this page's match check. Only
-        # header-based questions are compared against bands here.
+        # Genuine letter-reset splits are excluded above -- they structurally
+        # never have a crop band, so they must never count against this
+        # page's match check. Leading-block questions stay included (see
+        # is_band_eligible) since their band can still exist on the pixel side.
         if len(bands) == len(header_based_questions):
             header_indices = find_header_line_indices(active_lines) if active_lines else []
             for idx, (question, (image, band)) in enumerate(zip(header_based_questions, bands)):
