@@ -17,6 +17,7 @@ from parser import (
     parse_ocr_text,
     find_split_suggestions,
     find_question_crop_bounds,
+    find_letter_reset_crop_bounds,
     find_header_line_indices,
     find_choice_line_bounds,
     find_embedded_header_bounds,
@@ -121,6 +122,14 @@ def attach_question_images(parsed_questions, page_offsets, page_bands, page_imag
         else:
             for question in header_based_questions:
                 question["question_image"] = None
+
+        genuine_letter_reset_questions = [q for q in page_questions if not is_band_eligible(q)]
+        if genuine_letter_reset_questions and active_lines:
+            reset_image = page_images.get(page_number)
+            reset_bounds = find_letter_reset_crop_bounds(active_lines)
+            for question, band in zip(genuine_letter_reset_questions, reset_bounds):
+                if band is not None and reset_image is not None and question["question"].strip() == "":
+                    question["question_image"] = crop_question_image(reset_image, band[0], band[1])
 
 
 def attach_split_part_images(parts, page_image):

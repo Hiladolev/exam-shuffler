@@ -606,3 +606,91 @@ def test_classify_questions_flags_count_that_does_not_match_exam_expected_count(
     clean, needs_review = app.classify_questions(parsed_questions)
     assert [q["question"] for q in clean] == ["Q1", "Q2"]
     assert [q["question"] for q in needs_review] == ["Q3"]
+
+
+def test_attach_question_images_letter_reset_empty_stem_question_gets_crop_fallback_image():
+    image_a = Image.new("RGB", (100, 300), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e"], "header_line_index": 0, "has_real_header": True},
+        {"question": "", "choices": ["f", "g"], "header_line_index": 10, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("ג. c", 100, 120),
+        ("ד. d", 125, 145),
+        ("ה. e", 150, 170),
+        ("א. f", 250, 270),
+        ("ב. g", 275, 295),
+    ]
+    page_lines = {2: lines}
+    page_images = {2: image_a}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    assert parsed_questions[1]["question_image"] is not None
+
+
+def test_attach_question_images_letter_reset_nonempty_stem_question_keeps_text_no_image():
+    image_a = Image.new("RGB", (100, 300), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e"], "header_line_index": 0, "has_real_header": True},
+        {"question": "some recovered stem text", "choices": ["f", "g"], "header_line_index": 10, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("ג. c", 100, 120),
+        ("ד. d", 125, 145),
+        ("ה. e", 150, 170),
+        ("א. f", 250, 270),
+        ("ב. g", 275, 295),
+    ]
+    page_lines = {2: lines}
+    page_images = {2: image_a}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    # Even though the band paired successfully, a question that already has
+    # recovered stem text must never have that text hidden behind an image.
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_letter_reset_stops_pairing_when_pixel_side_finds_fewer_resets():
+    image_a = Image.new("RGB", (100, 400), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e"], "header_line_index": 0, "has_real_header": True},
+        {"question": "", "choices": ["f", "g"], "header_line_index": 10, "has_real_header": False},
+        {"question": "", "choices": ["h", "i"], "header_line_index": 15, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    # Text side detected two genuine letter-reset questions on this page, but
+    # the pixel side only finds one real choice-letter reset (א after ה) --
+    # "ג. h"/"ד. i" continue the same run instead of restarting at א. This
+    # simulates the pixel side undercounting relative to the text side.
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("ג. c", 100, 120),
+        ("ד. d", 125, 145),
+        ("ה. e", 150, 170),
+        ("א. f", 250, 270),
+        ("ב. g", 275, 295),
+        ("ג. h", 300, 320),
+        ("ד. i", 325, 345),
+    ]
+    page_lines = {2: lines}
+    page_images = {2: image_a}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    assert parsed_questions[1]["question_image"] is not None
+    assert parsed_questions[2]["question_image"] is None
