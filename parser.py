@@ -86,6 +86,25 @@ def find_question_crop_bounds(lines):
     return bounds
 
 
+def find_letter_reset_crop_bounds(lines):
+    bounds = []
+    max_rank_seen = -1
+    last_choice_bottom = None
+    for text, top, bottom in lines:
+        if is_any_header_line(text):
+            max_rank_seen = -1
+            continue
+        rank = choice_letter_rank(text)
+        if rank is None:
+            continue
+        if rank <= max_rank_seen:
+            band = (last_choice_bottom, top) if top - last_choice_bottom >= MIN_CROP_BAND_HEIGHT else None
+            bounds.append(band)
+        max_rank_seen = rank
+        last_choice_bottom = bottom
+    return bounds
+
+
 def find_choice_line_bounds(lines, header_index):
     bounds = []
     for text, top, bottom in lines[header_index + 1:]:

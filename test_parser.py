@@ -1,5 +1,6 @@
 from parser import (
     find_question_crop_bounds,
+    find_letter_reset_crop_bounds,
     find_split_suggestions,
     parse_ocr_text,
     strip_version_lines,
@@ -475,3 +476,69 @@ def test_is_choice_count_suspicious_falls_back_to_four_or_five_when_no_expected_
     assert is_choice_count_suspicious(5, expected_count=None) is False
     assert is_choice_count_suspicious(3, expected_count=None) is True
     assert is_choice_count_suspicious(0, expected_count=None) is True
+
+
+def test_find_letter_reset_crop_bounds_basic_reset_returns_band():
+    lines = [
+        ("א. one", 0, 20),
+        ("ב. two", 25, 45),
+        ("א. next question first choice", 200, 220),
+    ]
+    assert find_letter_reset_crop_bounds(lines) == [(45, 200)]
+
+
+def test_find_letter_reset_crop_bounds_chained_resets_anchor_off_previous_reset():
+    lines = [
+        ("א. Q_prev choice one", 0, 20),
+        ("ב. Q_prev choice two", 25, 45),
+        ("א. Q_next1 first choice", 200, 220),
+        ("ב. Q_next1 second choice", 225, 245),
+        ("א. Q_next2 first choice", 400, 420),
+    ]
+    # The second reset must anchor off Q_next1's own last choice (245), not
+    # Q_prev's (45) -- confirms chained headerless questions need no special
+    # "walk back through the chain" code, just continuous tracking.
+    assert find_letter_reset_crop_bounds(lines) == [(45, 200), (245, 400)]
+
+
+def test_find_letter_reset_crop_bounds_skips_non_choice_lines_when_anchoring():
+    lines = [
+        ("א. Q_prev last real choice", 0, 20),
+        ("mangled header attempt gibberish", 25, 45),
+        ("garbled intro sentence text", 50, 70),
+        ("א. Q_next first choice", 200, 220),
+    ]
+    # Reproduces the verified Q2/Q3 shape: the mangled-header-attempt and
+    # garbled-intro-sentence lines were transcribed by OCR but must not be
+    # used as the anchor -- the band still starts at Q_prev's real last
+    # choice (20), not at either skipped line's position.
+    assert find_letter_reset_crop_bounds(lines) == [(20, 200)]
+
+
+def test_find_letter_reset_crop_bounds_band_shorter_than_minimum_height_returns_none():
+    lines = [
+        ("א. one", 0, 20),
+        ("ב. two", 25, 45),
+        ("א. next", 47, 65),
+    ]
+    assert find_letter_reset_crop_bounds(lines) == [None]
+
+
+def test_find_letter_reset_crop_bounds_no_reset_present_returns_empty_list():
+    lines = [
+        ("א. one", 0, 20),
+        ("ב. two", 25, 45),
+    ]
+    assert find_letter_reset_crop_bounds(lines) == []
+
+
+def test_find_letter_reset_crop_bounds_resets_tracking_at_header_boundary():
+    lines = [
+        ("א. one", 0, 20),
+        ("ב. two", 25, 45),
+        ("שאלה מס' 2 (2 נק')", 50, 70),
+        ("א. real next question, not a reset", 75, 95),
+    ]
+    # A real header line resets the rank tracking, so the following
+    # legitimate א. start is correctly NOT flagged as a reset.
+    assert find_letter_reset_crop_bounds(lines) == []
