@@ -151,6 +151,21 @@ def test_strip_version_lines_per_page_matches_joined_stripping():
     assert joined_then_stripped == stripped_then_joined
 
 
+def test_strip_version_lines_handles_reversed_digits_and_trailing_garbage():
+    assert strip_version_lines("0000 מספר גרסה: lr a nse") == ""
+    assert strip_version_lines("0000 מספר גרסה: ras קב") == ""
+
+
+def test_strip_version_lines_removes_standalone_orphaned_stamp_line():
+    assert strip_version_lines("0000") == ""
+    assert strip_version_lines("real text\n0000\nmore text") == "real text\n\nmore text"
+
+
+def test_strip_version_lines_removes_bidi_wrapped_standalone_stamp():
+    bidi_wrapped_stamp = "‏0000‎"
+    assert strip_version_lines(bidi_wrapped_stamp) == ""
+
+
 def test_find_header_line_indices_returns_indices_of_header_lines():
     lines = [
         ("שאלה מס' 5 (2 נק')", 0, 20),

@@ -6,7 +6,8 @@ from shuffler_core import shuffle_questions
 HEADER_PATTERN = re.compile(r"שאלה\s*מס['’].*\d")
 POINTS_PATTERN = re.compile(r"\(\s*\d+\s*נק['’]\s*\)")
 CHOICE_PATTERN = re.compile(r"^\s*([אבגדה])\.\s*(.*)$")
-VERSION_PATTERN = re.compile(r"מספר\s*גרסה\s*:\s*\d+")
+VERSION_PATTERN = re.compile(r"(?:0000\s*)?מספר\s*גרסה\s*:.*")
+STANDALONE_VERSION_STAMP_PATTERN = re.compile(r"^\s*0000\s*$")
 PAGE_NUMBER_PATTERN = re.compile(r"מספר\s*עמוד\s*:?\s*\d+")
 BIDI_MARK_PATTERN = re.compile(r"[‎‏‪-‮⁦-⁩]")
 MIN_CROP_BAND_HEIGHT = 10
@@ -113,9 +114,12 @@ def strip_bidi_marks(text):
 
 
 def strip_version_lines(text):
+    text = strip_bidi_marks(text)
     lines = text.splitlines()
     result_lines = []
     for line in lines:
+        if STANDALONE_VERSION_STAMP_PATTERN.match(line):
+            line = ""
         line = VERSION_PATTERN.sub("", line)
         result_lines.append(PAGE_NUMBER_PATTERN.sub("", line))
     return "\n".join(result_lines)
