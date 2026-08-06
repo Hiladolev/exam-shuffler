@@ -1,12 +1,154 @@
+import base64
+import html
+
 import streamlit as st
 from pdf2image import pdfinfo_from_path
 
-from test_ocr import run_ocr_all_pages, MIN_PAGE_TEXT_LENGTH, POPPLER_PATH
-from parser import strip_version_lines, parse_ocr_text, find_split_suggestions
+from test_ocr import (
+    run_ocr_all_pages,
+    run_line_extraction_all_pages,
+    extract_line_boxes,
+    crop_question_image,
+    MIN_PAGE_TEXT_LENGTH,
+    POPPLER_PATH,
+)
+from parser import (
+    strip_version_lines,
+    parse_ocr_text,
+    find_split_suggestions,
+    find_question_crop_bounds,
+    find_letter_reset_crop_bounds,
+    find_header_line_indices,
+    find_choice_line_bounds,
+    find_embedded_header_bounds,
+    determine_expected_choice_count,
+    is_choice_count_suspicious,
+)
 from shuffler_core import shuffle_questions, split_choices, remove_choice
 
 UPLOAD_PATH = "uploaded_exam.pdf"
 MIN_CHOICES = 4
+RETRY_LINE_EXTRACTION_CONFIG = "--psm 12"
+
+
+def build_page_offsets(kept_pages):
+    page_offsets = []
+    accumulated_text = ""
+    for page_number, stripped_text in kept_pages:
+        page_start = len(accumulated_text.splitlines())
+        accumulated_text = (
+            accumulated_text + "\n\n" + stripped_text if accumulated_text else stripped_text
+        )
+        page_lines = accumulated_text.splitlines()
+        real_start = page_start
+        while real_start < len(page_lines) and not page_lines[real_start].strip():
+            real_start += 1
+        page_offsets.append((page_number, real_start))
+    return page_offsets
+
+
+def page_number_for_line_index(page_offsets, line_index):
+    result_page_number = page_offsets[0][0]
+    for page_number, start_index in page_offsets:
+        if start_index > line_index:
+            break
+        result_page_number = page_number
+    return result_page_number
+
+
+def attach_question_images(parsed_questions, page_offsets, page_bands, page_images=None, page_lines=None):
+    page_images = page_images or {}
+    page_lines = page_lines or {}
+
+    questions_by_page = {}
+    for question in parsed_questions:
+        page_number = page_number_for_line_index(page_offsets, question["header_line_index"])
+        questions_by_page.setdefault(page_number, []).append(question)
+
+    bands_by_page = {}
+    for page_number, image, band in page_bands:
+        bands_by_page.setdefault(page_number, []).append((image, band))
+
+    for page_number, page_questions in questions_by_page.items():
+        bands = bands_by_page.get(page_number, [])
+        active_lines = page_lines.get(page_number)
+
+        def is_band_eligible(question):
+            # A question with no real header is normally a letter-reset split,
+            # which structurally never has a band. The one exception is the
+            # leading block (header_line_index == 0): its header can be
+            # dropped by OCR on the text side while still existing as a real
+            # band on the independent pixel side, so it stays eligible.
+            return question.get("has_real_header", True) or question["header_line_index"] == 0
+
+        header_based_questions = [q for q in page_questions if is_band_eligible(q)]
+        for question in page_questions:
+            if not is_band_eligible(question):
+                question["question_image"] = None
+
+        # A count mismatch on the default pass may just mean Tesseract's
+        # default page segmentation dropped a header line entirely (seen in
+        # practice: a clean, non-overlapping header line missing from both
+        # OCR passes over the full page). Retry that one page at a sparser
+        # segmentation mode, but only ever trust the retry if it finds at
+        # least as many headers as the default pass did -- otherwise keep
+        # the default result and fall through to the same safe None
+        # fallback as before. If the retry IS accepted, its lines (not the
+        # default pass's) become "active_lines" -- the retried bands live in
+        # that pass's own pixel/segmentation space, not the default one's.
+        if len(bands) != len(header_based_questions) and page_number in page_images:
+            image = page_images[page_number]
+            retried_lines = extract_line_boxes(image, config=RETRY_LINE_EXTRACTION_CONFIG)
+            retried_bounds = find_question_crop_bounds(retried_lines)
+            if len(retried_bounds) >= len(bands):
+                bands = [(image, band) for band in retried_bounds]
+                active_lines = retried_lines
+
+        # Genuine letter-reset splits are excluded above -- they structurally
+        # never have a crop band, so they must never count against this
+        # page's match check. Leading-block questions stay included (see
+        # is_band_eligible) since their band can still exist on the pixel side.
+        if len(bands) == len(header_based_questions):
+            header_indices = find_header_line_indices(active_lines) if active_lines else []
+            for idx, (question, (image, band)) in enumerate(zip(header_based_questions, bands)):
+                question["question_image"] = (
+                    crop_question_image(image, band[0], band[1]) if band is not None else None
+                )
+                if active_lines and idx < len(header_indices):
+                    header_index = header_indices[idx]
+                    question["choice_line_bounds"] = find_choice_line_bounds(active_lines, header_index)
+                    question["embedded_header_bounds"] = find_embedded_header_bounds(active_lines, header_index)
+                    question["page_image"] = image
+        else:
+            for question in header_based_questions:
+                question["question_image"] = None
+
+        genuine_letter_reset_questions = [q for q in page_questions if not is_band_eligible(q)]
+        if genuine_letter_reset_questions and active_lines:
+            reset_image = page_images.get(page_number)
+            reset_bounds = find_letter_reset_crop_bounds(active_lines)
+            for question, band in zip(genuine_letter_reset_questions, reset_bounds):
+                if band is not None and reset_image is not None and question["question"].strip() == "":
+                    question["question_image"] = crop_question_image(reset_image, band[0], band[1])
+
+
+def attach_split_part_images(parts, page_image):
+    for part in parts:
+        bounds = part.pop("image_bounds", None)
+        if bounds is not None and page_image is not None:
+            part["question_image"] = crop_question_image(page_image, bounds[0], bounds[1])
+
+
+def classify_questions(parsed_questions):
+    expected_count = determine_expected_choice_count(parsed_questions)
+    clean_questions = []
+    needs_review = []
+    for q in parsed_questions:
+        if is_choice_count_suspicious(len(q["choices"]), expected_count):
+            needs_review.append(q)
+        else:
+            clean_questions.append(q)
+    return clean_questions, needs_review
 
 
 def run_pipeline(pdf_path):
@@ -15,27 +157,39 @@ def run_pipeline(pdf_path):
 
     progress = st.progress(0)
     status = st.empty()
-    raw_texts = []
+    kept_pages = []
     for i, (page_number, text) in enumerate(run_ocr_all_pages(pdf_path), start=1):
         if len(text.strip()) >= MIN_PAGE_TEXT_LENGTH:
-            raw_texts.append(text)
+            kept_pages.append((page_number, strip_version_lines(text)))
         progress.progress(i / total_to_process)
         status.text(f"Processing page {i} of {total_to_process}")
     progress.empty()
     status.empty()
 
-    raw_text = "\n\n".join(raw_texts)
-    raw_text = strip_version_lines(raw_text)
-    parsed_questions = parse_ocr_text(raw_text)
+    page_offsets = build_page_offsets(kept_pages)
+    raw_text = "\n\n".join(text for _, text in kept_pages)
+    parsed_questions = parse_ocr_text(raw_text, page_offsets)
 
-    clean_questions = []
-    needs_review = []
-    for q in parsed_questions:
-        if len(q["choices"]) == 0 or len(q["choices"]) > 5:
-            needs_review.append(q)
-        else:
-            clean_questions.append(q)
+    progress = st.progress(0)
+    status = st.empty()
+    page_bands = []
+    page_images = {}
+    page_lines = {}
+    for i, (page_number, image, lines) in enumerate(run_line_extraction_all_pages(pdf_path), start=1):
+        page_text_length = sum(len(text) for text, _, _ in lines)
+        if page_text_length >= MIN_PAGE_TEXT_LENGTH:
+            page_images[page_number] = image
+            page_lines[page_number] = lines
+            for band in find_question_crop_bounds(lines):
+                page_bands.append((page_number, image, band))
+        progress.progress(i / total_to_process)
+        status.text(f"Extracting question images: page {i} of {total_to_process}")
+    progress.empty()
+    status.empty()
 
+    attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    clean_questions, needs_review = classify_questions(parsed_questions)
     shuffled_questions = shuffle_questions(clean_questions)
     return shuffled_questions, needs_review
 
@@ -63,6 +217,60 @@ def build_final_content(edited_clean, edited_review_cards):
     return "\n".join(lines)
 
 
+def _render_question_html(q, index):
+    lines = [f"<h3>Question {index}</h3>"]
+    if q.get("question_image"):
+        b64 = base64.b64encode(q["question_image"]).decode("ascii")
+        lines.append(f'<img src="data:image/png;base64,{b64}">')
+    else:
+        lines.append(f"<p>{html.escape(q['question'])}</p>")
+    lines.append("<ul>")
+    for j, choice in enumerate(q["choices"]):
+        lines.append(f"<li>{j}: {html.escape(choice)}</li>")
+    lines.append("</ul>")
+    lines.append(f"<p>Correct answer index: {q['correct_index']}</p>")
+    return "\n".join(lines)
+
+
+def _render_review_card_html(q, index):
+    lines = [f"<h3>Flagged Question {index}</h3>"]
+    if q.get("question_image"):
+        b64 = base64.b64encode(q["question_image"]).decode("ascii")
+        lines.append(f'<img src="data:image/png;base64,{b64}">')
+    else:
+        lines.append(f"<p>{html.escape(q['question'])}</p>")
+    lines.append("<ul>")
+    for j, choice in enumerate(q["choices"]):
+        lines.append(f"<li>{j}: {html.escape(choice)}</li>")
+    lines.append("</ul>")
+    lines.append(f"<p>Correct answer index: {q['correct_index']}</p>")
+    return "\n".join(lines)
+
+
+def build_final_html(edited_clean, edited_review_cards):
+    body_parts = [_render_question_html(q, i) for i, q in enumerate(edited_clean, start=1)]
+
+    if edited_review_cards:
+        body_parts.append("<h2>Reviewed (previously flagged) Questions</h2>")
+        body_parts.extend(
+            _render_review_card_html(q, i) for i, q in enumerate(edited_review_cards, start=1)
+        )
+
+    body = "\n".join(body_parts)
+    return f"""<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<style>
+body {{ direction: rtl; font-family: sans-serif; }}
+</style>
+</head>
+<body>
+{body}
+</body>
+</html>"""
+
+
 def render_question_editor(state, key_prefix):
     # version_key forces a fresh widget identity (new key) for choice inputs,
     # remove buttons, and the correct-answer radio whenever a choice is removed.
@@ -76,9 +284,14 @@ def render_question_editor(state, key_prefix):
     version_key = f"{key_prefix}_version"
     version = st.session_state.setdefault(version_key, 0)
 
-    question_text = st.text_area(
-        "Question text", value=state["question"], key=f"{key_prefix}_question"
-    )
+    question_image = state.get("question_image")
+    if question_image:
+        st.image(question_image)
+        question_text = state["question"]
+    else:
+        question_text = st.text_area(
+            "Question text", value=state["question"], key=f"{key_prefix}_question"
+        )
 
     choices = []
     remove_index = None
@@ -126,7 +339,12 @@ def render_question_editor(state, key_prefix):
         key=f"{key_prefix}_v{version}_correct_index",
     )
 
-    return {"question": question_text, "choices": choices, "correct_index": correct_index}
+    return {
+        "question": question_text,
+        "choices": choices,
+        "correct_index": correct_index,
+        "question_image": question_image,
+    }
 
 
 st.title("Exam Shuffler")
@@ -173,7 +391,11 @@ if st.session_state.get("processed"):
 
         if split_key not in st.session_state:
             st.subheader(f"Flagged Question {i + 1}")
-            st.write(q["question"])
+            question_image = q.get("question_image")
+            if question_image:
+                st.image(question_image)
+            else:
+                st.write(q["question"])
             for k, choice in enumerate(q["choices"]):
                 st.write(f"{k}: {choice}")
 
@@ -204,9 +426,16 @@ if st.session_state.get("processed"):
                 elif any(not (0 < p < len(q["choices"])) for p in split_points):
                     st.error(f"Split points must be between 1 and {len(q['choices']) - 1}.")
                 else:
-                    st.session_state[split_key] = shuffle_questions(
-                        split_choices(q["question"], q["choices"], split_points)
+                    split_parts = split_choices(
+                        q["question"],
+                        q["choices"],
+                        split_points,
+                        question_image=q.get("question_image"),
+                        choice_line_bounds=q.get("choice_line_bounds"),
+                        embedded_header_bounds=q.get("embedded_header_bounds"),
                     )
+                    attach_split_part_images(split_parts, q.get("page_image"))
+                    st.session_state[split_key] = shuffle_questions(split_parts)
                     st.rerun()
         else:
             split_cards = st.session_state[split_key]
@@ -216,10 +445,10 @@ if st.session_state.get("processed"):
                     render_question_editor(card, key_prefix=f"review_{i}_part{c}")
                 )
 
-    final_content = build_final_content(edited_clean, edited_review_cards)
+    final_html = build_final_html(edited_clean, edited_review_cards)
     st.download_button(
         "Generate Final File",
-        data=final_content.encode("utf-8"),
-        file_name="final_exam.txt",
-        mime="text/plain",
+        data=final_html.encode("utf-8"),
+        file_name="final_exam.html",
+        mime="text/html",
     )

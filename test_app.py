@@ -1,5 +1,7 @@
+import base64
 from unittest.mock import patch
 
+from PIL import Image
 from streamlit.testing.v1 import AppTest
 
 import app
@@ -162,3 +164,533 @@ def test_build_final_content_does_not_reshuffle_review_cards():
     assert "  1: y" in result
     assert "  2: z" in result
     assert "Correct answer index: 2" in result
+
+
+def test_build_final_html_renders_image_tag_when_question_image_present():
+    edited_clean = [
+        {
+            "question": "ignored text",
+            "choices": ["a", "b", "c", "d"],
+            "correct_index": 1,
+            "question_image": b"FAKEPNGBYTES",
+        },
+    ]
+    result = app.build_final_html(edited_clean, [])
+
+    expected_b64 = base64.b64encode(b"FAKEPNGBYTES").decode("ascii")
+    assert f'<img src="data:image/png;base64,{expected_b64}">' in result
+    assert "ignored text" not in result
+    assert "<li>0: a</li>" in result
+    assert "Correct answer index: 1" in result
+
+
+def test_build_final_html_renders_text_fallback_when_no_question_image():
+    edited_clean = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "correct_index": 0, "question_image": None},
+    ]
+    result = app.build_final_html(edited_clean, [])
+
+    assert "<p>Q1</p>" in result
+    assert "<img" not in result
+
+
+def test_build_final_html_escapes_html_special_characters():
+    edited_clean = [
+        {
+            "question": "What does <b>bold</b> & \"quotes\" do?",
+            "choices": ["<script>alert(1)</script>", "b", "c", "d"],
+            "correct_index": 0,
+            "question_image": None,
+        },
+    ]
+    result = app.build_final_html(edited_clean, [])
+
+    assert "<script>" not in result
+    assert "&lt;script&gt;" in result
+    assert "<b>bold</b>" not in result
+    assert "&lt;b&gt;bold&lt;/b&gt;" in result
+
+
+def test_build_final_html_renders_review_cards_as_plain_text():
+    edited_review_cards = [
+        {"question": "Merged?", "choices": ["x", "y", "z", "w"], "correct_index": 2},
+    ]
+    result = app.build_final_html([], edited_review_cards)
+
+    assert "<p>Merged?</p>" in result
+    assert "<li>2: z</li>" in result
+    assert "Correct answer index: 2" in result
+
+
+def test_build_final_html_renders_review_card_image_when_present():
+    edited_review_cards = [
+        {
+            "question": "ignored text",
+            "choices": ["a", "b", "c", "d"],
+            "correct_index": 1,
+            "question_image": b"FAKEPNGBYTES",
+        },
+    ]
+    result = app.build_final_html([], edited_review_cards)
+
+    expected_b64 = base64.b64encode(b"FAKEPNGBYTES").decode("ascii")
+    assert f'<img src="data:image/png;base64,{expected_b64}">' in result
+    assert "ignored text" not in result
+    assert "<li>0: a</li>" in result
+    assert "Correct answer index: 1" in result
+
+
+def test_attach_question_images_matched_page_keeps_image_when_another_page_mismatches():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    image_b = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+        {"question": "Q3", "choices": ["a", "b", "c", "d"], "header_line_index": 11},
+    ]
+    page_offsets = [(2, 0), (3, 10)]
+    # Page 2 has one question and one matching band -> should get an image.
+    # Page 3 has two questions but only one band -> mismatch, both fall back to None.
+    page_bands = [
+        (2, image_a, (5, 8)),
+        (3, image_b, (12, 15)),
+    ]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is None
+    assert parsed_questions[2]["question_image"] is None
+
+
+def test_attach_question_images_handles_none_band_within_a_matched_page():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 5},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [
+        (2, image_a, (5, 30)),
+        (2, image_a, None),
+    ]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_never_misattributes_when_per_page_miscounts_cancel_globally():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0), (3, 10)]
+    # Page 2 has 1 question but 2 bands (a phantom extra band); page 3 has 1
+    # question but 0 bands (a missing band). Globally that's 2 questions vs
+    # 2 bands -- which would match under a whole-document count check, even
+    # though neither page individually lines up. That's exactly the "totals
+    # cancel out" scenario this per-page check exists to prevent.
+    page_bands = [
+        (2, image_a, (5, 8)),
+        (2, image_a, (9, 12)),
+    ]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_ignores_bands_on_a_page_with_no_questions():
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0), (3, 10)]
+    page_bands = [
+        (2, Image.new("RGB", (100, 50)), (5, 8)),
+        (3, Image.new("RGB", (100, 50)), (5, 8)),
+    ]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+
+
+def test_attach_question_images_retries_mismatched_page_and_accepts_improved_count():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0)]
+    # Default pass only found one band -- a mismatch against 2 questions.
+    page_bands = [(2, image_a, (5, 30))]
+    page_images = {2: image_a}
+    retried_lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. Paris", 100, 120),
+        ("שאלה מס' 2 (5 נק')", 130, 150),
+        ("א. Rome", 200, 220),
+    ]
+
+    with patch("app.extract_line_boxes", return_value=retried_lines) as mock_extract:
+        app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images)
+
+    mock_extract.assert_called_once_with(image_a, config=app.RETRY_LINE_EXTRACTION_CONFIG)
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is not None
+
+
+def test_attach_question_images_rejects_retry_that_finds_fewer_headers():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+        {"question": "Q3", "choices": ["a", "b", "c", "d"], "header_line_index": 20},
+    ]
+    page_offsets = [(2, 0)]
+    # Default pass found 2 bands against 3 questions -- a mismatch.
+    page_bands = [(2, image_a, (5, 30)), (2, image_a, (35, 60))]
+    page_images = {2: image_a}
+    # Retry regresses to only 1 header -- must be rejected, not swapped in.
+    retried_lines = [("שאלה מס' 1 (5 נק')", 0, 20), ("א. Paris", 100, 120)]
+
+    with patch("app.extract_line_boxes", return_value=retried_lines):
+        app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images)
+
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None
+    assert parsed_questions[2]["question_image"] is None
+
+
+def test_attach_question_images_skips_retry_without_a_recorded_page_image():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+
+    with patch("app.extract_line_boxes") as mock_extract:
+        app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    mock_extract.assert_not_called()
+    assert parsed_questions[0]["question_image"] is None
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_attaches_choice_bounds_stopping_at_loose_header():
+    image_a = Image.new("RGB", (100, 300), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e", "f"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (20, 50))]
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("שאלה 'on' 2 (5 בק')", 100, 120),
+        ("ג. c", 130, 150),
+        ("ד. d", 155, 175),
+        ("ה. e", 180, 200),
+        ("א. f", 205, 225),
+    ]
+    page_lines = {2: lines}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_lines=page_lines)
+
+    q = parsed_questions[0]
+    assert q["question_image"] is not None
+    # The loose header at index 3 is now a real boundary (Task 3) -- it stops
+    # the scan instead of being glued in as an embedded candidate, so only the
+    # two choices before it belong to this question's bounds.
+    assert q["choice_line_bounds"] == [(50, 70), (75, 95)]
+    assert q["embedded_header_bounds"] == {}
+    assert q["page_image"] is image_a
+
+
+def test_attach_question_images_uses_retried_lines_for_bounds_when_retry_accepted():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    page_images = {2: image_a}
+    stale_default_lines = [("stale data that must not be used", 0, 5)]
+    retried_lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. Paris", 100, 120),
+        ("שאלה מס' 2 (5 נק')", 130, 150),
+        ("א. Rome", 200, 220),
+    ]
+
+    with patch("app.extract_line_boxes", return_value=retried_lines):
+        app.attach_question_images(
+            parsed_questions, page_offsets, page_bands, page_images,
+            page_lines={2: stale_default_lines},
+        )
+
+    assert parsed_questions[0]["choice_line_bounds"] == [(100, 120)]
+    assert parsed_questions[1]["choice_line_bounds"] == [(200, 220)]
+
+
+def test_attach_question_images_without_page_lines_matches_old_behavior():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 8))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert "choice_line_bounds" not in parsed_questions[0]
+
+
+def test_attach_question_images_letter_reset_question_gets_none_without_affecting_siblings():
+    image_a = Image.new("RGB", (100, 200), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0, "has_real_header": True},
+        {"question": "Q2", "choices": ["a", "b", "c", "d"], "header_line_index": 10, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    # Only one band exists -- for Q1, the only has_real_header question. Q2 has
+    # no real header so it must never be compared against band count at all.
+    page_bands = [(2, image_a, (5, 30))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_leading_block_without_header_still_gets_image():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    # Q1's header was dropped by OCR on the text side (has_real_header=False),
+    # but it's the leading block (header_line_index == 0), not a genuine
+    # letter-reset split -- the pixel side can still have a real band for it,
+    # so it must stay eligible for band matching instead of being forced to None.
+    page_bands = [(2, image_a, (5, 30))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+
+
+def test_attach_question_images_defaults_has_real_header_true_when_key_absent():
+    image_a = Image.new("RGB", (100, 50), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d"], "header_line_index": 0},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 8))]
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands)
+
+    assert parsed_questions[0]["question_image"] is not None
+
+
+def test_attach_split_part_images_crops_using_bounds_and_page_image():
+    page_image = Image.new("RGB", (200, 300), color="white")
+    parts = [
+        {"question": "Q", "choices": ["a", "b"], "question_image": b"EXISTING"},
+        {"question": "", "choices": ["c", "d"], "image_bounds": (50, 100)},
+    ]
+
+    app.attach_split_part_images(parts, page_image)
+
+    assert parts[0]["question_image"] == b"EXISTING"
+    assert parts[1]["question_image"] is not None
+    assert "image_bounds" not in parts[1]
+
+
+def test_attach_split_part_images_leaves_question_image_unset_without_bounds():
+    parts = [{"question": "", "choices": ["c", "d"]}]
+
+    app.attach_split_part_images(parts, Image.new("RGB", (200, 300), color="white"))
+
+    assert parts[0].get("question_image") is None
+
+
+def test_page_number_for_line_index_returns_first_page_for_index_zero():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 0) == 2
+
+
+def test_page_number_for_line_index_returns_correct_page_within_range():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 7) == 4
+
+
+def test_page_number_for_line_index_returns_correct_page_at_exact_boundary():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 6) == 4
+
+
+def test_page_number_for_line_index_returns_last_page_beyond_all_offsets():
+    page_offsets = [(2, 0), (4, 6), (5, 10)]
+    assert app.page_number_for_line_index(page_offsets, 15) == 5
+
+
+def test_build_page_offsets_matches_worked_example_with_no_trailing_newlines():
+    kept_pages = [
+        (2, "l1\nl2\nl3\nl4\nl5"),
+        (4, "m1\nm2\nm3"),
+        (5, "n1\nn2\nn3\nn4"),
+    ]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (4, 6), (5, 10)]
+
+
+def test_build_page_offsets_handles_trailing_newline_in_a_page():
+    kept_pages = [
+        (2, "a\nb\n"),
+        (3, "c\nd"),
+    ]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 4)]
+
+
+def test_build_page_offsets_single_page_has_offset_zero():
+    kept_pages = [(2, "a\nb\nc")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0)]
+
+
+def test_build_page_offsets_handles_single_line_pages():
+    kept_pages = [(2, "solo"), (3, "next")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 2)]
+
+
+def test_build_page_offsets_handles_a_page_that_stripped_to_empty():
+    kept_pages = [(2, "l1\nl2"), (3, ""), (4, "m1\nm2")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 3), (4, 5)]
+
+
+def test_build_page_offsets_multiple_trailing_blank_lines_do_not_cause_drift():
+    # Matches the real sample exam: every page's OCR'd text ends with
+    # several trailing blank lines (not just one), yet this alone never
+    # causes drift as long as the next page's own text starts with real
+    # content -- confirmed against the real document during investigation.
+    kept_pages = [(2, "a\nb\n\n\n"), (3, "c\nd")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 6)]
+
+
+def test_build_page_offsets_skips_leading_blank_line_within_a_page():
+    # Reproduces the real bug: a page's own stripped text can start with
+    # a blank line (e.g. a version-number line at the very top gets
+    # dropped entirely by strip_version_lines, revealing a pre-existing
+    # blank line as the new first line). The recorded start must land on
+    # the first real content line, not the blank one -- otherwise
+    # parse_ocr_text's page-boundary check (which only ever sees non-blank
+    # lines, since blanks are skipped via `continue` first) never fires.
+    kept_pages = [(2, "a\nb"), (3, "\nc\nd")]
+    assert app.build_page_offsets(kept_pages) == [(2, 0), (3, 4)]
+
+
+def test_classify_questions_flags_count_that_does_not_match_exam_expected_count():
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a"] * 4},
+        {"question": "Q2", "choices": ["a"] * 4},
+        {"question": "Q3", "choices": ["a"] * 3},
+    ]
+    clean, needs_review = app.classify_questions(parsed_questions)
+    assert [q["question"] for q in clean] == ["Q1", "Q2"]
+    assert [q["question"] for q in needs_review] == ["Q3"]
+
+
+def test_attach_question_images_letter_reset_empty_stem_question_gets_crop_fallback_image():
+    image_a = Image.new("RGB", (100, 300), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e"], "header_line_index": 0, "has_real_header": True},
+        {"question": "", "choices": ["f", "g"], "header_line_index": 10, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("ג. c", 100, 120),
+        ("ד. d", 125, 145),
+        ("ה. e", 150, 170),
+        ("א. f", 250, 270),
+        ("ב. g", 275, 295),
+    ]
+    page_lines = {2: lines}
+    page_images = {2: image_a}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    assert parsed_questions[1]["question_image"] is not None
+
+
+def test_attach_question_images_letter_reset_nonempty_stem_question_keeps_text_no_image():
+    image_a = Image.new("RGB", (100, 300), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e"], "header_line_index": 0, "has_real_header": True},
+        {"question": "some recovered stem text", "choices": ["f", "g"], "header_line_index": 10, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("ג. c", 100, 120),
+        ("ד. d", 125, 145),
+        ("ה. e", 150, 170),
+        ("א. f", 250, 270),
+        ("ב. g", 275, 295),
+    ]
+    page_lines = {2: lines}
+    page_images = {2: image_a}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    # Even though the band paired successfully, a question that already has
+    # recovered stem text must never have that text hidden behind an image.
+    assert parsed_questions[1]["question_image"] is None
+
+
+def test_attach_question_images_letter_reset_stops_pairing_when_pixel_side_finds_fewer_resets():
+    image_a = Image.new("RGB", (100, 400), color="white")
+    parsed_questions = [
+        {"question": "Q1", "choices": ["a", "b", "c", "d", "e"], "header_line_index": 0, "has_real_header": True},
+        {"question": "", "choices": ["f", "g"], "header_line_index": 10, "has_real_header": False},
+        {"question": "", "choices": ["h", "i"], "header_line_index": 15, "has_real_header": False},
+    ]
+    page_offsets = [(2, 0)]
+    page_bands = [(2, image_a, (5, 30))]
+    # Text side detected two genuine letter-reset questions on this page, but
+    # the pixel side only finds one real choice-letter reset (א after ה) --
+    # "ג. h"/"ד. i" continue the same run instead of restarting at א. This
+    # simulates the pixel side undercounting relative to the text side.
+    lines = [
+        ("שאלה מס' 1 (5 נק')", 0, 20),
+        ("א. a", 50, 70),
+        ("ב. b", 75, 95),
+        ("ג. c", 100, 120),
+        ("ד. d", 125, 145),
+        ("ה. e", 150, 170),
+        ("א. f", 250, 270),
+        ("ב. g", 275, 295),
+        ("ג. h", 300, 320),
+        ("ד. i", 325, 345),
+    ]
+    page_lines = {2: lines}
+    page_images = {2: image_a}
+
+    app.attach_question_images(parsed_questions, page_offsets, page_bands, page_images, page_lines)
+
+    assert parsed_questions[1]["question_image"] is not None
+    assert parsed_questions[2]["question_image"] is None

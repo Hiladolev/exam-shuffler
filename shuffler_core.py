@@ -1,21 +1,32 @@
 import random
 
 
-def split_choices(question, choices, split_points):
+def split_choices(question, choices, split_points, question_image=None, choice_line_bounds=None, embedded_header_bounds=None):
     n = len(choices)
     if any(not (0 < p < n) for p in split_points):
         raise ValueError(f"split points must be between 1 and {n - 1}")
     if list(split_points) != sorted(set(split_points)):
         raise ValueError("split points must be sorted, unique, and strictly increasing")
 
+    choice_line_bounds = choice_line_bounds or []
+    embedded_header_bounds = embedded_header_bounds or {}
+
     boundaries = [0] + list(split_points) + [n]
     parts = []
     for idx in range(len(boundaries) - 1):
         start, end = boundaries[idx], boundaries[idx + 1]
-        parts.append({
+        part = {
             "question": question if idx == 0 else "",
             "choices": choices[start:end],
-        })
+        }
+        if idx == 0:
+            if question_image is not None:
+                part["question_image"] = question_image
+        elif start in embedded_header_bounds and start < len(choice_line_bounds):
+            header_bottom = embedded_header_bounds[start][1]
+            choice_top = choice_line_bounds[start][0]
+            part["image_bounds"] = (header_bottom, choice_top)
+        parts.append(part)
     return parts
 
 
@@ -36,6 +47,7 @@ def shuffle_questions(questions):
             "question": q["question"],
             "choices": shuffled_choices,
             "correct_index": correct_index,
+            "question_image": q.get("question_image"),
         })
     return result
 

@@ -1,5 +1,8 @@
+import io
+
 from pdf2image import convert_from_path, pdfinfo_from_path
 import pytesseract
+from pytesseract import Output
 
 TESSERACT_CMD = r"C:\Users\hilad\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
 POPPLER_PATH = r"C:\poppler\poppler-26.02.0\Library\bin"
@@ -28,6 +31,61 @@ def run_ocr_all_pages(pdf_path, poppler_path=POPPLER_PATH):
     for page_number, image in zip(range(2, total_pages + 1), images):
         text = pytesseract.image_to_string(image, lang="heb+eng")
         yield page_number, text
+
+
+def run_line_extraction_all_pages(pdf_path, poppler_path=POPPLER_PATH):
+    total_pages = pdfinfo_from_path(pdf_path, poppler_path=poppler_path)["Pages"]
+    if total_pages < 2:
+        return
+    images = convert_from_path(
+        pdf_path, first_page=2, last_page=total_pages, poppler_path=poppler_path
+    )
+    for page_number, image in zip(range(2, total_pages + 1), images):
+        lines = extract_line_boxes(image)
+        yield page_number, image, lines
+
+
+def _group_words_into_lines(data):
+    lines = {}
+    order = []
+    for i in range(len(data["text"])):
+        word = data["text"][i].strip()
+        if not word:
+            continue
+
+        key = (data["block_num"][i], data["par_num"][i], data["line_num"][i])
+        top = data["top"][i]
+        bottom = top + data["height"][i]
+        if key not in lines:
+            lines[key] = {"words": [], "top": top, "bottom": bottom}
+            order.append(key)
+
+        entry = lines[key]
+        entry["words"].append((data["left"][i], word))
+        entry["top"] = min(entry["top"], top)
+        entry["bottom"] = max(entry["bottom"], bottom)
+
+    result = []
+    for key in order:
+        entry = lines[key]
+        text = " ".join(word for _, word in sorted(entry["words"], key=lambda pair: pair[0], reverse=True))
+        result.append((text, entry["top"], entry["bottom"]))
+    return result
+
+
+def extract_line_boxes(image, config=""):
+    data = pytesseract.image_to_data(image, lang="heb+eng", config=config, output_type=Output.DICT)
+    return _group_words_into_lines(data)
+
+
+def crop_question_image(image, top_px, bottom_px, padding=5):
+    width, height = image.size
+    top = max(0, top_px - padding)
+    bottom = min(height, bottom_px + padding)
+    cropped = image.crop((0, top, width, bottom))
+    buffer = io.BytesIO()
+    cropped.save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 if __name__ == "__main__":
