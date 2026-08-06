@@ -116,8 +116,7 @@ def strip_version_lines(text):
     lines = text.splitlines()
     result_lines = []
     for line in lines:
-        if VERSION_PATTERN.search(line):
-            continue
+        line = VERSION_PATTERN.sub("", line)
         result_lines.append(PAGE_NUMBER_PATTERN.sub("", line))
     return "\n".join(result_lines)
 
